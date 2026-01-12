@@ -1,0 +1,73 @@
+{
+  "development": {
+    "use_env_variable": "DATABASE_URL",
+    "username": "postgres",
+    "password": "postgres_35702",
+    "database": "postgres",
+    "host": "127.0.0.1",
+    "port": 5432,
+    "dialect": "postgres",
+    "logging": true,
+    "define": {
+      "schema": "public",
+      "freezeTableName": true,
+      "underscored": true,
+      "timestamps": true,
+      "paranoid": true
+    },
+    "dialectOptions": {
+      "prependSearchPath": true,
+      "ssl": false
+    },
+    "pool": {
+      "max": 5,
+      "min": 0,
+      "acquire": 30000,
+      "idle": 10000
+    }
+  },
+  "test": {
+    "username": "postgres",
+    "password": "postgres_35702",
+    "database": "kawait_test",
+    "host": "127.0.0.1",
+    "port": 5432,
+    "dialect": "postgres",
+    "logging": false,
+    "define": {
+      "schema": "public",
+      "freezeTableName": true,
+      "underscored": true,
+      "timestamps": true,
+      "paranoid": true
+    },
+    "dialectOptions": {
+      "prependSearchPath": true,
+      "ssl": false
+    }
+  },
+  "production": {
+    "use_env_variable": "DATABASE_URL",
+    "username": "postgres",
+    "password": "postgres_35702",
+    "database": "kawait_prod",
+    "host": "127.0.0.1",
+    "port": 5432,
+    "dialect": "postgres",
+    "logging": false,
+    "define": {
+      "schema": "public",
+      "freezeTableName": true,
+      "underscored": true,
+      "timestamps": true,
+      "paranoid": true
+    },
+    "dialectOptions": {
+      "prependSearchPath": true,
+      "ssl": {
+        "require": true,
+        "rejectUnauthorized": false
+      }
+    }
+  }
+}

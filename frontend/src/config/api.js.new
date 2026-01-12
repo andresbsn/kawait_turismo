@@ -1,0 +1,284 @@
+// URL base de la API (debería estar en variables de entorno en producción)
+export const API_BASE_URL = 'http://localhost:3001/api';
+
+// Configuración por defecto para las peticiones
+export const defaultConfig = {
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  credentials: 'include', // Importante para manejar cookies de autenticación
+};
+
+// Función para manejar las respuestas de la API
+export const handleResponse = async (response) => {
+  const data = await response.json();
+  
+  if (!response.ok) {
+    // Si la respuesta no es exitosa, lanzar un error con el mensaje del servidor
+    const error = new Error(data.message || 'Error en la petición');
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+  
+  return data;
+};
+
+// Función para crear headers con el token de autenticación
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
+// Cliente HTTP genérico
+export const apiClient = {
+  get: async (endpoint, options = {}) => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...defaultConfig,
+      ...options,
+      method: 'GET',
+      headers: {
+        ...defaultConfig.headers,
+        ...getAuthHeaders(),
+        ...options.headers,
+      },
+    });
+    
+    return handleResponse(response);
+  },
+  
+  post: async (endpoint, data, options = {}) => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...defaultConfig,
+      ...options,
+      method: 'POST',
+      headers: {
+        ...defaultConfig.headers,
+        ...getAuthHeaders(),
+        ...options.headers,
+      },
+      body: JSON.stringify(data),
+    });
+    
+    return handleResponse(response);
+  },
+  
+  put: async (endpoint, data, options = {}) => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...defaultConfig,
+      ...options,
+      method: 'PUT',
+      headers: {
+        ...defaultConfig.headers,
+        ...getAuthHeaders(),
+        ...options.headers,
+      },
+      body: JSON.stringify(data),
+    });
+    
+    return handleResponse(response);
+  },
+  
+  delete: async (endpoint, options = {}) => {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...defaultConfig,
+      ...options,
+      method: 'DELETE',
+      headers: {
+        ...defaultConfig.headers,
+        ...getAuthHeaders(),
+        ...options.headers,
+      },
+    });
+    
+    return handleResponse(response);
+  },
+};
+
+// Servicios de autenticación
+export const authService = {
+  login: async (email, password, rememberMe) => {
+    return apiClient.post('/auth/login', { email, password, rememberMe });
+  },
+  
+  logout: async () => {
+    return apiClient.post('/auth/logout');
+  },
+  
+  getCurrentUser: async () => {
+    return apiClient.get('/auth/me');
+  },
+};
+
+// Servicio de usuarios
+export const userService = {
+  getUsers: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiClient.get(`/users${query ? `?${query}` : ''}`);
+  },
+  
+  getUser: async (userId) => {
+    return apiClient.get(`/users/${userId}`);
+  },
+  
+  createUser: async (userData) => {
+    return apiClient.post('/users', userData);
+  },
+  
+  updateUser: async (userId, userData) => {
+    return apiClient.put(`/users/${userId}`, userData);
+  },
+  
+  deleteUser: async (userId) => {
+    return apiClient.delete(`/users/${userId}`);
+  },
+};
+
+// Servicio de tours
+export const tourService = {
+  // Obtener lista de tours con paginación y filtros
+  async obtenerTours(params = {}) {
+    try {
+      const response = await apiClient.get('/tours', { params });
+      return {
+        success: true,
+        tours: response.data || [],
+        total: response.total || 0,
+        page: response.page || 1,
+        limit: response.limit || 10
+      };
+    } catch (error) {
+      console.error('Error al obtener tours:', error);
+      return {
+        success: false,
+        message: error.message || 'Error al obtener la lista de tours',
+        tours: [],
+        total: 0
+      };
+    }
+  },
+  
+  // Obtener un tour por ID
+  async obtenerTourPorId(id) {
+    try {
+      const response = await apiClient.get(`/tours/${id}`);
+      return {
+        success: true,
+        tour: response.data
+      };
+    } catch (error) {
+      console.error(`Error al obtener el tour con ID ${id}:`, error);
+      return {
+        success: false,
+        message: error.message || `Error al obtener el tour con ID ${id}`
+      };
+    }
+  },
+  
+  // Crear un nuevo tour
+  async crearTour(tourData) {
+    try {
+      const response = await apiClient.post('/tours', tourData);
+      return {
+        success: true,
+        tour: response.data,
+        message: 'Tour creado exitosamente'
+      };
+    } catch (error) {
+      console.error('Error al crear el tour:', error);
+      return {
+        success: false,
+        message: error.message || 'Error al crear el tour'
+      };
+    }
+  },
+  
+  // Actualizar un tour existente
+  async actualizarTour(id, tourData) {
+    try {
+      const response = await apiClient.put(`/tours/${id}`, tourData);
+      return {
+        success: true,
+        tour: response.data,
+        message: 'Tour actualizado exitosamente'
+      };
+    } catch (error) {
+      console.error(`Error al actualizar el tour con ID ${id}:`, error);
+      return {
+        success: false,
+        message: error.message || `Error al actualizar el tour con ID ${id}`
+      };
+    }
+  },
+  
+  // Eliminar un tour
+  async eliminarTour(id) {
+    try {
+      await apiClient.delete(`/tours/${id}`);
+      return {
+        success: true,
+        message: 'Tour eliminado exitosamente'
+      };
+    } catch (error) {
+      console.error(`Error al eliminar el tour con ID ${id}:`, error);
+      return {
+        success: false,
+        message: error.message || `Error al eliminar el tour con ID ${id}`
+      };
+    }
+  },
+  
+  // Métodos adicionales para compatibilidad
+  getTours: async (params = {}) => {
+    const result = await tourService.obtenerTours(params);
+    return result.tours || [];
+  },
+  
+  getTour: async (tourId) => {
+    const result = await tourService.obtenerTourPorId(tourId);
+    return result.tour;
+  },
+  
+  createTour: async (tourData) => {
+    const result = await tourService.crearTour(tourData);
+    return result.tour;
+  },
+  
+  updateTour: async (tourId, tourData) => {
+    const result = await tourService.actualizarTour(tourId, tourData);
+    return result.tour;
+  },
+  
+  deleteTour: async (tourId) => {
+    const result = await tourService.eliminarTour(tourId);
+    return result.success;
+  }
+};
+
+// Servicio de reservas
+export const bookingService = {
+  getBookings: async (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return apiClient.get(`/bookings${query ? `?${query}` : ''}`);
+  },
+  
+  getBooking: async (bookingId) => {
+    return apiClient.get(`/bookings/${bookingId}`);
+  },
+  
+  createBooking: async (bookingData) => {
+    return apiClient.post('/bookings', bookingData);
+  },
+  
+  updateBooking: async (bookingId, bookingData) => {
+    return apiClient.put(`/bookings/${bookingId}`, bookingData);
+  },
+  
+  deleteBooking: async (bookingId) => {
+    return apiClient.delete(`/bookings/${bookingId}`);
+  },
+  
+  getBookingStatuses: async () => {
+    return apiClient.get('/bookings/statuses');
+  },
+};

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Comprobante de Pago - {{comprobante.numero}}</title>
+  <style>
+    @page {
+      size: A4;
+    }
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #333;
+      padding: 0;
+      margin: 0;
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #eee;
+      padding-bottom: 15px;
+    }
+    .header img {
+      max-width: 150px;
+      height: auto;
+      margin-bottom: 10px;
+    }
+    .header h1 {
+      margin: 5px 0;
+      font-size: 20px;
+      color: #2c3e50;
+    }
+    .header p {
+      margin: 3px 0;
+      color: #7f8c8d;
+    }
+    .section {
+      margin-bottom: 20px;
+    }
+    .section-title {
+      background-color: #f8f9fa;
+      padding: 8px 10px;
+      font-weight: bold;
+      border-left: 4px solid #3498db;
+      margin-bottom: 10px;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      margin: 0 -10px;
+    }
+    .col {
+      flex: 1;
+      padding: 0 10px;
+      min-width: 200px;
+      margin-bottom: 10px;
+    }
+    .label {
+      font-weight: bold;
+      color: #7f8c8d;
+      margin-bottom: 3px;
+    }
+    .value {
+      margin-bottom: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+      font-weight: bold;
+    }
+    .text-right {
+      text-align: right;
+    }
+    .text-center {
+      text-align: center;
+    }
+    .total {
+      font-size: 14px;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+    .footer {
+      margin-top: 30px;
+      padding-top: 15px;
+      border-top: 1px solid #eee;
+      font-size: 11px;
+      color: #7f8c8d;
+      text-align: center;
+    }
+    .status {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: bold;
+      text-transform: uppercase;
+    }
+    .status-paid {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .status-pending {
+      background-color: #fff3cd;
+      color: #856404;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    {{#if empresa.logo}}
+      <img src="{{empresa.logo}}" alt="{{empresa.nombre}}">
+    {{else}}
+      <h1>{{empresa.nombre}}</h1>
+    {{/if}}
+    <p>{{empresa.direccion}}</p>
+    <p>Tel: {{empresa.telefono}}</p>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">Comprobante de Pago</h2>
+    <div class="row">
+      <div class="col">
+        <div class="label">N° de Comprobante</div>
+        <div class="value">{{comprobante.numero}}</div>
+        
+        <div class="label">Fecha de Emisión</div>
+        <div class="value">{{comprobante.fecha_emision}}</div>
+        
+        <div class="label">Estado</div>
+        <div class="value">
+          <span class="status status-{{lowercase comprobante.estado}}">
+            {{comprobante.estado}}
+          </span>
+        </div>
+      </div>
+      
+      <div class="col">
+        <div class="label">Método de Pago</div>
+        <div class="value">{{comprobante.metodo_pago}}</div>
+
+        <div class="label">Moneda</div>
+        <div class="value">{{comprobante.moneda}}</div>
+        
+        <div class="label">Monto Total</div>
+        <div class="value" style="font-size: 16px; font-weight: bold;">
+          {{formatMoney comprobante.monto comprobante.moneda}}
+        </div>
+        
+        <div class="label">Referencia</div>
+        <div class="value">{{comprobante.referencia}}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">Datos del Cliente</h2>
+    <div class="row">
+      <div class="col">
+        <div class="label">Nombre</div>
+        <div class="value">{{cliente.nombre}}</div>
+        
+        <div class="label">Documento</div>
+        <div class="value">{{cliente.documento}}</div>
+      </div>
+      
+      <div class="col">
+        <div class="label">Email</div>
+        <div class="value">{{cliente.email}}</div>
+        
+        <div class="label">Teléfono</div>
+        <div class="value">{{cliente.telefono}}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2 class="section-title">Detalle de la Reserva</h2>
+    <div class="row">
+      <div class="col">
+        <div class="label">Referencia</div>
+        <div class="value">{{reserva.referencia}}</div>
+        
+        <div class="label">Fecha de Reserva</div>
+        <div class="value">{{reserva.fecha_reserva}}</div>
+      </div>
+      
+      <div class="col">
+        <div class="label">Monto Total</div>
+        <div class="value">{{formatMoney reserva.monto_total reserva.moneda}}</div>
+      </div>
+    </div>
+  </div>
+
+  {{#if cuotas.length}}
+  <div class="section">
+    <h2 class="section-title">Cuotas Pagadas</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>N° Cuota</th>
+          <th>Monto</th>
+          <th>Vencimiento</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each cuotas}}
+        <tr>
+          <td>{{this.numero}}</td>
+          <td class="text-right">{{this.monto}}</td>
+          <td>{{this.vencimiento}}</td>
+          <td>
+            <span class="status status-{{lowercase this.estado}}">
+              {{this.estado}}
+            </span>
+          </td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  {{/if}}
+
+  {{#if cheque}}
+  <div class="section">
+    <h2 class="section-title">Datos de Cheque</h2>
+    <div class="row">
+      <div class="col">
+        <div class="label">Banco</div>
+        <div class="value">{{cheque.banco}}</div>
+
+        <div class="label">N° de Cheque</div>
+        <div class="value">{{cheque.numero}}</div>
+      </div>
+
+      <div class="col">
+        <div class="label">Fecha de Emisión</div>
+        <div class="value">{{cheque.fecha_emision}}</div>
+
+        <div class="label">Fecha de Cobro</div>
+        <div class="value">{{cheque.fecha_cobro}}</div>
+      </div>
+    </div>
+  </div>
+  {{/if}}
+
+  <div class="section">
+    <div class="row">
+      <div class="col">
+        <div class="label">Monto Total del Pago</div>
+        <div class="total">{{formatMoney comprobante.monto comprobante.moneda}}</div>
+      </div>
+    </div>
+  </div>
+
+  {{#if comprobante.observaciones}}
+  <div class="section">
+    <h2 class="section-title">Observaciones</h2>
+    <p>{{comprobante.observaciones}}</p>
+  </div>
+  {{/if}}
+
+  <div class="footer">
+    <p>{{empresa.nombre}} - {{empresa.direccion}} - {{empresa.telefono}}</p>
+    <p>Comprobante generado el {{comprobante.fecha_emision}} - Válido como factura de pago</p>
+  </div>
+</body>
+</html>

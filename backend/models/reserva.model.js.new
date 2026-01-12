@@ -1,0 +1,122 @@
+'use strict';
+const { Model, DataTypes } = require('sequelize');
+
+module.exports = (sequelize) => {
+  class Reserva extends Model {
+    static associate(models) {
+      // Relación con Tour
+      this.belongsTo(models.Tour, {
+        foreignKey: 'tour_id',
+        as: 'tour'
+      });
+    }
+  }
+
+  Reserva.init({
+    id: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true
+    },
+    codigo: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true
+    },
+    tour_id: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'tours',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'RESTRICT'
+    },
+    nombre_cliente: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    email_cliente: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      validate: {
+        isEmail: {
+          msg: 'El email debe ser una dirección de correo válida'
+        }
+      }
+    },
+    telefono_cliente: {
+      type: DataTypes.STRING,
+      allowNull: false
+    },
+    fecha_reserva: {
+      type: DataTypes.DATEONLY,
+      allowNull: false,
+      validate: {
+        isDate: {
+          msg: 'La fecha de reserva no es válida'
+        }
+      }
+    },
+    cantidad_personas: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+      validate: {
+        min: {
+          args: [1],
+          msg: 'La cantidad de personas debe ser al menos 1'
+        }
+      }
+    },
+    precio_unitario: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false
+    },
+    estado: {
+      type: DataTypes.ENUM('pendiente', 'confirmada', 'cancelada', 'completada'),
+      defaultValue: 'pendiente',
+      allowNull: false,
+      validate: {
+        isIn: {
+          args: [['pendiente', 'confirmada', 'cancelada', 'completada']],
+          msg: 'Estado de reserva no válido'
+        }
+      }
+    },
+    notas: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    activo: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
+    created_at: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW
+    },
+    updated_at: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW
+    },
+    deleted_at: {
+      type: DataTypes.DATE,
+      allowNull: true
+    }
+  }, {
+    sequelize,
+    modelName: 'Reserva',
+    tableName: 'reservas',
+    timestamps: true,
+    paranoid: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+    deletedAt: 'deleted_at'
+  });
+
+  return Reserva;
+};
