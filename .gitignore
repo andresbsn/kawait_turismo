@@ -7,3 +7,19 @@ dist
 build
 coverage
 .vscode
+
+# Archivos temporales y basura
+*.old
+*.new
+*.temp
+*.tmp
+*.bak
+*.swp
+*~
+*.log
+datos.txt
+check-*.js
+
+# Archivos con nombres raros
+*'
+*"

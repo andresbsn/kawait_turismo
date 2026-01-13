@@ -8,48 +8,41 @@ const sequelize = db.sequelize;
 const app = express();
 
 // Configuración de CORS
-const allowedOrigins = String(process.env.CORS_ORIGINS || 'http://localhost:5173')
+const allowedOrigins = String(process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:3000,http://localhost')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
 
-// Middleware de CORS personalizado
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma, x-token');
-    res.header('Access-Control-Expose-Headers', 'Content-Length, Content-Type, x-token, Authorization');
-    
-    // Manejar solicitudes de preflight
-    if (req.method === 'OPTIONS') {
-      res.header('Access-Control-Max-Age', '86400'); // 24 horas
-      return res.status(200).end();
-    }
-  }
-  
-  next();
-});
-
-// Configuración de CORS para rutas específicas
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+    // Permitir peticiones sin origin (como Postman, curl, o peticiones del mismo servidor)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // En desarrollo, permitir todos los orígenes localhost
+    if (process.env.NODE_ENV !== 'production') {
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        return callback(null, true);
+      }
+    }
+    
+    // Verificar si el origin está en la lista de permitidos
+    if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      console.log('CORS bloqueado para origen:', origin);
+      console.log('Orígenes permitidos:', allowedOrigins);
       callback(new Error('No permitido por CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'X-Requested-With', 'Pragma'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'X-Requested-With', 'Pragma', 'x-token'],
   exposedHeaders: ['Content-Length', 'Content-Type', 'x-token', 'Authorization'],
   maxAge: 86400 // 24 horas
 };
 
-// Aplicar CORS con las opciones configuradas
 app.use(cors(corsOptions));
 
 app.use(express.json());

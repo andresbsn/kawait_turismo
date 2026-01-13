@@ -1,4 +1,0 @@
-clave hasheada 202511 / $2a$10$PV19LA6RMGy8RwNih56hN.gntuOOpEf5IJ3pFm1TmXTgKP99135T.
-- login / fallo de autenticación
-
--nº referencia

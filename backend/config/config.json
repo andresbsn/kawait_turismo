@@ -1,6 +1,5 @@
 {
   "development": {
-    "use_env_variable": "DATABASE_URL",
     "username": "postgres",
     "password": "postgres_35702",
     "database": "postgres",
@@ -64,10 +63,7 @@
     },
     "dialectOptions": {
       "prependSearchPath": true,
-      "ssl": {
-        "require": true,
-        "rejectUnauthorized": false
-      }
+      "ssl": false
     }
   }
 }
