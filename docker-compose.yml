@@ -11,6 +11,11 @@ services:
       - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-kawait_prod}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
@@ -24,7 +29,8 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-kawait_prod}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - "3001:3001"
 

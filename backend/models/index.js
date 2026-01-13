@@ -83,25 +83,42 @@ modelNames.forEach(modelName => {
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
-// Función para sincronizar modelos con la base de datos
+// Función auxiliar para esperar
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Función para sincronizar modelos con la base de datos con reintentos
 db.syncDatabase = async (options = {}) => {
-  try {
-    // Por defecto, solo verificar la conexión
-    if (options.force) {
-      await sequelize.sync({ force: true });
-      console.log('Base de datos recreada completamente (force: true)');
-    } else if (options.alter) {
-      await sequelize.sync({ alter: true });
-      console.log('Esquema de base de datos actualizado (alter: true)');
-    } else {
-      // Solo verificar la conexión
-      await sequelize.authenticate();
-      console.log('Conexión a la base de datos establecida correctamente');
+  const maxRetries = 5;
+  const retryDelay = 3000; // 3 segundos
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Intento ${attempt}/${maxRetries} de conexión a la base de datos...`);
+      
+      // Por defecto, solo verificar la conexión
+      if (options.force) {
+        await sequelize.sync({ force: true });
+        console.log('Base de datos recreada completamente (force: true)');
+      } else if (options.alter) {
+        await sequelize.sync({ alter: true });
+        console.log('Esquema de base de datos actualizado (alter: true)');
+      } else {
+        // Solo verificar la conexión
+        await sequelize.authenticate();
+        console.log('Conexión a la base de datos establecida correctamente');
+      }
+      return true;
+    } catch (error) {
+      console.error(`Error en intento ${attempt}/${maxRetries}:`, error.message);
+      
+      if (attempt < maxRetries) {
+        console.log(`Reintentando en ${retryDelay/1000} segundos...`);
+        await sleep(retryDelay);
+      } else {
+        console.error('Error al sincronizar la base de datos después de todos los reintentos:', error);
+        return false;
+      }
     }
-    return true;
-  } catch (error) {
-    console.error('Error al sincronizar la base de datos:', error);
-    return false;
   }
 };
 
