@@ -4,12 +4,12 @@ require('dotenv').config();
 const { Sequelize } = require('sequelize');
 
 const sequelize = new Sequelize(
-  process.env.PROD_DB_NAME || process.env.POSTGRES_DB || 'kawait_prod',
-  process.env.PROD_DB_USER || process.env.POSTGRES_USER || 'admin',
-  process.env.PROD_DB_PASSWORD || process.env.POSTGRES_PASSWORD || 'postgres_35702',
+  process.env.POSTGRES_DB || process.env.PROD_DB_NAME || 'kawait_prod',
+  process.env.POSTGRES_USER || process.env.PROD_DB_USER || 'admin',
+  process.env.POSTGRES_PASSWORD || process.env.PROD_DB_PASSWORD || 'postgres_35702',
   {
-    host: process.env.PROD_DB_HOST || process.env.DB_HOST || 'localhost',
-    port: process.env.PROD_DB_PORT || 5432,
+    host: process.env.DB_HOST || process.env.PROD_DB_HOST || 'localhost',
+    port: process.env.DB_PORT || process.env.PROD_DB_PORT || 5432,
     dialect: 'postgres',
     logging: console.log
   }

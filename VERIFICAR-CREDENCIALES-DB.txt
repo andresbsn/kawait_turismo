@@ -1,0 +1,201 @@
+===============================================
+ERROR: PASSWORD AUTHENTICATION FAILED
+===============================================
+
+PROBLEMA:
+---------
+El script no puede conectarse a PostgreSQL porque las credenciales
+en el .env son incorrectas o no existen.
+
+SOLUCIÓN:
+=========
+
+PASO 1: VERIFICAR CREDENCIALES EN EL VPS
+-----------------------------------------
+
+En el VPS, ejecuta:
+
+cd /home/usuario48/turismo/kawait_turismo/backend
+cat .env | grep -E 'POSTGRES|PROD_DB|DB_'
+
+Deberías ver las variables de base de datos.
+
+
+PASO 2: VERIFICAR QUÉ CREDENCIALES USA EL BACKEND
+--------------------------------------------------
+
+El backend está funcionando, así que debe tener las credenciales correctas.
+Revisa cómo se conecta actualmente:
+
+# Ver los logs del backend para encontrar la configuración de DB
+pm2 logs backend --lines 100 | grep -i "database\|postgres\|connection"
+
+# O ver las variables de entorno que usa PM2
+pm2 env backend
+
+
+PASO 3: OPCIONES PARA ENCONTRAR LAS CREDENCIALES CORRECTAS
+-----------------------------------------------------------
+
+OPCIÓN A: Si usas Docker Compose
+---------------------------------
+
+cat docker-compose.yml | grep -A 10 "postgres"
+
+Busca las variables:
+- POSTGRES_USER
+- POSTGRES_PASSWORD
+- POSTGRES_DB
+
+
+OPCIÓN B: Verificar archivo de configuración de modelos
+--------------------------------------------------------
+
+El backend está funcionando, así que revisa cómo se conecta:
+
+cat models/index.js | head -30
+
+Esto te mostrará qué variables de entorno usa.
+
+
+PASO 4: EJECUTAR EL SCRIPT CON LAS CREDENCIALES CORRECTAS
+----------------------------------------------------------
+
+Una vez que sepas las credenciales correctas, tienes 2 opciones:
+
+OPCIÓN 1: Actualizar el .env
+-----------------------------
+
+Edita el .env y agrega/corrige:
+
+nano .env
+
+Agrega o corrige estas líneas (con las credenciales correctas):
+POSTGRES_USER=tu_usuario_correcto
+POSTGRES_PASSWORD=tu_password_correcta
+POSTGRES_DB=kawait_prod
+DB_HOST=localhost
+
+Guarda (Ctrl+O, Enter, Ctrl+X)
+
+Luego ejecuta:
+node ejecutar-migraciones.js
+
+
+OPCIÓN 2: Ejecutar con variables de entorno inline
+---------------------------------------------------
+
+Si no quieres modificar el .env, ejecuta directamente:
+
+POSTGRES_USER=tu_usuario \
+POSTGRES_PASSWORD=tu_password \
+POSTGRES_DB=kawait_prod \
+DB_HOST=localhost \
+node ejecutar-migraciones.js
+
+
+PASO 5: SI USAS DOCKER
+-----------------------
+
+Si PostgreSQL está en Docker, las credenciales están en docker-compose.yml
+y puedes acceder directamente al contenedor:
+
+# Ver contenedores
+docker ps
+
+# Acceder a PostgreSQL dentro del contenedor
+docker exec -it <nombre_contenedor_postgres> psql -U <usuario> -d kawait_prod
+
+# Ejemplo común:
+docker exec -it postgres psql -U postgres -d kawait_prod
+
+# O si el contenedor se llama "db":
+docker exec -it db psql -U admin -d kawait_prod
+
+# Una vez dentro, ejecutar los SQL:
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_nombre VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_destino VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_inicio DATE;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_fin DATE;
+ALTER TABLE reservas ALTER COLUMN tour_id DROP NOT NULL;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS referencia VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS moneda_precio_unitario VARCHAR(3) NOT NULL DEFAULT 'ARS';
+CREATE TABLE IF NOT EXISTS reserva_clientes (
+  id SERIAL PRIMARY KEY,
+  reserva_id INTEGER NOT NULL REFERENCES reservas(id) ON DELETE CASCADE,
+  cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_reserva_cliente UNIQUE (reserva_id, cliente_id)
+);
+\q
+
+
+COMANDOS ÚTILES PARA ENCONTRAR CREDENCIALES
+============================================
+
+# Ver todas las variables de entorno del .env
+cat .env
+
+# Ver configuración de Docker Compose
+cat docker-compose.yml
+
+# Ver cómo se conecta el backend
+cat models/index.js | head -50
+
+# Ver variables de entorno de PM2
+pm2 env backend
+
+# Listar contenedores Docker
+docker ps
+
+# Ver logs del contenedor de PostgreSQL
+docker logs <nombre_contenedor_postgres>
+
+
+CREDENCIALES COMUNES A PROBAR
+==============================
+
+Basado en los archivos que vimos antes, las credenciales probablemente son:
+
+Usuario: admin
+Password: postgres_35702
+Database: kawait_prod
+Host: localhost o db (si es Docker)
+Port: 5432
+
+Prueba con:
+
+POSTGRES_USER=admin \
+POSTGRES_PASSWORD=postgres_35702 \
+POSTGRES_DB=kawait_prod \
+DB_HOST=localhost \
+node ejecutar-migraciones.js
+
+O si está en Docker:
+
+POSTGRES_USER=admin \
+POSTGRES_PASSWORD=postgres_35702 \
+POSTGRES_DB=kawait_prod \
+DB_HOST=db \
+node ejecutar-migraciones.js
+
+
+RESUMEN DE PASOS
+================
+
+1. Verificar credenciales:
+   cat .env
+   cat docker-compose.yml
+
+2. Probar con las credenciales encontradas:
+   POSTGRES_USER=xxx POSTGRES_PASSWORD=xxx POSTGRES_DB=kawait_prod node ejecutar-migraciones.js
+
+3. O usar Docker directamente:
+   docker exec -it <contenedor> psql -U <usuario> -d kawait_prod
+   (ejecutar los SQL manualmente)
+
+4. Reiniciar backend:
+   pm2 restart backend
