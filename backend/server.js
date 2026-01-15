@@ -75,23 +75,14 @@ app.use('/api/cuotas', cuotaRoutes);
 app.use('/api/pagos', pagoRoutes);
 app.use('/api/reportes', reportesRoutes);
 
-// Manejador de errores
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ 
-    success: false,
-    message: 'Error interno del servidor',
-    error: process.env.NODE_ENV === 'development' ? err.message : {}
-  });
-});
+// Middleware de manejo de errores centralizado
+const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
 
-// Ruta no encontrada
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'Ruta no encontrada'
-  });
-});
+// Ruta no encontrada (debe ir antes del errorHandler)
+app.use(notFoundHandler);
+
+// Manejador de errores (debe ser el último middleware)
+app.use(errorHandler);
 
 // Sincronizar base de datos y arrancar servidor
 const PORT = process.env.PORT || 3001;

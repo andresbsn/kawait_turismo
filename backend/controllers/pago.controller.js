@@ -1,6 +1,10 @@
 const { Op, Sequelize } = require('sequelize');
 const db = require('../models');
 const { Reserva, CuentaCorriente, Cuota, Cliente } = db.sequelize.models;
+const asyncHandler = require('../utils/asyncHandler');
+const { success } = require('../utils/responseHandler');
+const { withTransaction } = require('../utils/transactionWrapper');
+const { NotFoundError, ValidationError } = require('../middlewares/errorHandler');
 
 // Tipos de pago permitidos
 const METODOS_PAGO = ['efectivo', 'transferencia', 'tarjeta_credito', 'tarjeta_debito', 'deposito', 'otro'];
@@ -8,28 +12,23 @@ const METODOS_PAGO = ['efectivo', 'transferencia', 'tarjeta_credito', 'tarjeta_d
 /**
  * Registra un pago para una reserva y actualiza las cuentas corrientes de los clientes
  */
-exports.registrarPagoReserva = async (req, res) => {
-  const t = await db.sequelize.transaction();
+exports.registrarPagoReserva = asyncHandler(async (req, res) => {
+  const { reservaId } = req.params;
+  const { 
+    monto, 
+    metodo_pago, 
+    fecha_pago = new Date(), 
+    observaciones = '',
+    cliente_id,
+    cuotas_ids = []
+  } = req.body;
   
-  try {
-    const { reservaId } = req.params;
-    const { 
-      monto, 
-      metodo_pago, 
-      fecha_pago = new Date(), 
-      observaciones = '',
-      cliente_id, // ID del cliente al que se le aplica el pago (opcional, si no se especifica se aplica proporcionalmente)
-      cuotas_ids = [] // IDs de las cuotas específicas a las que se aplica el pago
-    } = req.body;
+  // Validar método de pago
+  if (!METODOS_PAGO.includes(metodo_pago)) {
+    throw new ValidationError(`Método de pago no válido. Debe ser uno de: ${METODOS_PAGO.join(', ')}`);
+  }
 
-    // Validar método de pago
-    if (!METODOS_PAGO.includes(metodo_pago)) {
-      return res.status(400).json({
-        success: false,
-        message: `Método de pago no válido. Debe ser uno de: ${METODOS_PAGO.join(', ')}`
-      });
-    }
-
+  const resultado = await withTransaction(async (transaction) => {
     // 1. Obtener la reserva con sus cuentas corrientes y clientes
     const reserva = await Reserva.findByPk(reservaId, {
       include: [
@@ -53,41 +52,29 @@ exports.registrarPagoReserva = async (req, res) => {
           ]
         }
       ],
-      transaction: t
+      transaction
     });
-
+    
     if (!reserva) {
-      await t.rollback();
-      return res.status(404).json({
-        success: false,
-        message: 'Reserva no encontrada'
-      });
+      throw new NotFoundError('Reserva no encontrada');
     }
-
+    
     // 2. Verificar que la reserva tenga cuentas corrientes
     if (!reserva.cuentas_corrientes || reserva.cuentas_corrientes.length === 0) {
-      await t.rollback();
-      return res.status(400).json({
-        success: false,
-        message: 'La reserva no tiene cuentas corrientes asociadas'
-      });
+      throw new ValidationError('La reserva no tiene cuentas corrientes asociadas');
     }
 
     // 3. Aplicar el pago a las cuentas corrientes
     const resultadosPago = [];
     let montoRestante = parseFloat(monto);
-
+    
     // Si se especificó un cliente, aplicar el pago solo a sus cuentas
     const cuentasAAplicar = cliente_id 
       ? reserva.cuentas_corrientes.filter(cc => cc.cliente_id === parseInt(cliente_id))
       : reserva.cuentas_corrientes;
-
+    
     if (cuentasAAplicar.length === 0) {
-      await t.rollback();
-      return res.status(400).json({
-        success: false,
-        message: 'No se encontraron cuentas corrientes para el cliente especificado'
-      });
+      throw new ValidationError('No se encontraron cuentas corrientes para el cliente especificado');
     }
 
     // Aplicar el pago a cada cuenta
@@ -118,7 +105,7 @@ exports.registrarPagoReserva = async (req, res) => {
             fecha_pago: estaPagada ? new Date() : null,
             metodo_pago: metodo_pago,
             observaciones: observaciones
-          }, { transaction: t });
+          }, { transaction });
 
           montoRestante -= montoAPagar;
           
@@ -145,7 +132,7 @@ exports.registrarPagoReserva = async (req, res) => {
         saldo_pendiente: nuevoSaldoCuenta,
         estado: nuevoSaldoCuenta <= 0 ? 'pagado' : 'pendiente',
         fecha_ultimo_pago: new Date()
-      }, { transaction: t });
+      }, { transaction });
     }
 
     // 4. Actualizar el estado general de la reserva
@@ -161,53 +148,39 @@ exports.registrarPagoReserva = async (req, res) => {
       monto_abonado: montoTotalAbonado,
       estado_pago: estaPagadaCompleto ? 'completo' : 'parcial',
       fecha_ultimo_pago: new Date()
-    }, { transaction: t });
-
-    await t.commit();
-
-    // 5. Obtener la reserva actualizada con toda su información
-    const reservaActualizada = await Reserva.findByPk(reservaId, {
-      include: [
-        {
-          model: CuentaCorriente,
-          as: 'cuentas_corrientes',
-          include: [
-            {
-              model: Cuota,
-              as: 'cuotas',
-              order: [['numero_cuota', 'ASC']]
-            },
-            {
-              model: Cliente,
-              as: 'cliente',
-              attributes: ['id', 'nombre', 'apellido']
-            }
-          ]
-        }
-      ]
-    });
-
-    res.status(200).json({
-      success: true,
-      message: 'Pago registrado exitosamente',
-      data: {
-        reserva: reservaActualizada,
-        pagos_aplicados: resultadosPago,
-        monto_restante: Math.max(0, montoRestante)
+    }, { transaction });
+    
+    return { resultadosPago, montoRestante, reservaId };
+  });
+  
+  // 5. Obtener la reserva actualizada con toda su información
+  const reservaActualizada = await Reserva.findByPk(resultado.reservaId, {
+    include: [
+      {
+        model: CuentaCorriente,
+        as: 'cuentas_corrientes',
+        include: [
+          {
+            model: Cuota,
+            as: 'cuotas',
+            order: [['numero_cuota', 'ASC']]
+          },
+          {
+            model: Cliente,
+            as: 'cliente',
+            attributes: ['id', 'nombre', 'apellido']
+          }
+        ]
       }
-    });
-
-  } catch (error) {
-    await t.rollback();
-    console.error('Error al registrar el pago:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error al registrar el pago',
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
-  }
-};
+    ]
+  });
+  
+  return success(res, {
+    reserva: reservaActualizada,
+    pagos_aplicados: resultado.resultadosPago,
+    monto_restante: Math.max(0, resultado.montoRestante)
+  }, 'Pago registrado exitosamente');
+});
 
 /**
  * Genera las cuotas iniciales para una cuenta corriente

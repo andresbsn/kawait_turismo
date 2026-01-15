@@ -7,7 +7,10 @@
     "start": "set NODE_ENV=production && node server.js",
     "dev": "nodemon --config nodemon.json",
     "db:sync": "node sync-db.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:verbose": "jest --verbose"
   },
   "keywords": [
     "turismo",
@@ -32,6 +35,8 @@
     "sequelize": "^6.37.7"
   },
   "devDependencies": {
-    "nodemon": "^2.0.22"
+    "nodemon": "^2.0.22",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3"
   }
 }
