@@ -1,0 +1,181 @@
+===============================================
+COMANDOS PARA EJECUTAR EN EL VPS
+===============================================
+
+El error persiste porque el .sequelizerc no está en el VPS o hay un problema
+con las variables de entorno.
+
+SOLUCIÓN PASO A PASO:
+=====================
+
+PASO 1: VERIFICAR SI .sequelizerc EXISTE EN EL VPS
+---------------------------------------------------
+
+cd /home/usuario48/turismo/kawait_turismo/backend
+ls -la .sequelizerc
+
+Si NO existe, créalo AHORA:
+
+cat > .sequelizerc << 'EOF'
+const path = require('path');
+
+module.exports = {
+  'config': path.resolve('config', 'config.js'),
+  'models-path': path.resolve('models'),
+  'seeders-path': path.resolve('seeders'),
+  'migrations-path': path.resolve('migrations')
+};
+EOF
+
+Verificar que se creó:
+cat .sequelizerc
+
+
+PASO 2: VERIFICAR QUE config.js EXISTE Y ES VÁLIDO
+---------------------------------------------------
+
+cat config/config.js | head -20
+
+Debe mostrar el contenido del archivo sin errores.
+
+Si da error, verifica que el archivo esté completo:
+wc -l config/config.js
+
+Debe tener 95 líneas.
+
+
+PASO 3: VERIFICAR VARIABLES DE ENTORNO
+---------------------------------------
+
+cat .env
+
+Debe tener AL MENOS:
+NODE_ENV=production
+PROD_DB_USER=admin
+PROD_DB_PASSWORD=postgres_35702
+PROD_DB_NAME=kawait_prod
+PROD_DB_HOST=localhost
+PROD_DB_PORT=5432
+
+Si NO están, agrégalas:
+
+cat >> .env << 'EOF'
+NODE_ENV=production
+PROD_DB_USER=admin
+PROD_DB_PASSWORD=postgres_35702
+PROD_DB_NAME=kawait_prod
+PROD_DB_HOST=localhost
+PROD_DB_PORT=5432
+EOF
+
+
+PASO 4: PROBAR SEQUELIZE CLI NUEVAMENTE
+----------------------------------------
+
+cd /home/usuario48/turismo/kawait_turismo/backend
+npx sequelize-cli db:migrate
+
+
+SI SIGUE FALLANDO - USAR SQL DIRECTO (RECOMENDADO)
+===================================================
+
+Olvídate de Sequelize CLI y ejecuta el SQL directamente.
+Es más rápido y confiable:
+
+psql -U admin -d kawait_prod << 'EOF'
+-- Agregar campos de tour personalizado
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_nombre VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_destino VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_inicio DATE;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_fin DATE;
+
+-- Hacer tour_id opcional
+ALTER TABLE reservas ALTER COLUMN tour_id DROP NOT NULL;
+
+-- Agregar campos adicionales
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS referencia VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS descripcion TEXT;
+
+-- Agregar campo de moneda
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS moneda_precio_unitario VARCHAR(3) NOT NULL DEFAULT 'ARS';
+
+-- Crear tabla reserva_clientes si no existe
+CREATE TABLE IF NOT EXISTS reserva_clientes (
+  id SERIAL PRIMARY KEY,
+  reserva_id INTEGER NOT NULL REFERENCES reservas(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_reserva_cliente UNIQUE (reserva_id, cliente_id)
+);
+
+-- Verificar que se crearon las columnas
+SELECT column_name, data_type, is_nullable 
+FROM information_schema.columns 
+WHERE table_name = 'reservas' 
+ORDER BY ordinal_position;
+EOF
+
+Deberías ver la lista de columnas de la tabla reservas.
+
+
+PASO 5: REINICIAR EL BACKEND
+-----------------------------
+
+pm2 restart backend
+pm2 logs backend --lines 50
+
+
+VERIFICACIÓN FINAL
+==================
+
+Accede a http://138.97.200.88:8084/reservas
+
+Si todo está bien:
+✅ No verás errores de "column does not exist"
+✅ Las reservas se cargarán correctamente
+
+
+RESUMEN DE COMANDOS (COPIA Y PEGA TODO ESTO)
+=============================================
+
+# Crear .sequelizerc
+cd /home/usuario48/turismo/kawait_turismo/backend
+cat > .sequelizerc << 'EOF'
+const path = require('path');
+
+module.exports = {
+  'config': path.resolve('config', 'config.js'),
+  'models-path': path.resolve('models'),
+  'seeders-path': path.resolve('seeders'),
+  'migrations-path': path.resolve('migrations')
+};
+EOF
+
+# Ejecutar SQL directamente (RECOMENDADO)
+psql -U admin -d kawait_prod << 'EOF'
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_nombre VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_destino VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_inicio DATE;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_fin DATE;
+ALTER TABLE reservas ALTER COLUMN tour_id DROP NOT NULL;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS referencia VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS moneda_precio_unitario VARCHAR(3) NOT NULL DEFAULT 'ARS';
+CREATE TABLE IF NOT EXISTS reserva_clientes (
+  id SERIAL PRIMARY KEY,
+  reserva_id INTEGER NOT NULL REFERENCES reservas(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_reserva_cliente UNIQUE (reserva_id, cliente_id)
+);
+EOF
+
+# Reiniciar backend
+pm2 restart backend
+
+# Ver logs
+pm2 logs backend --lines 50

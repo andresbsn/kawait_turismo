@@ -1,0 +1,176 @@
+===============================================
+SOLUCIÓN SIN PSQL - USAR NODE.JS
+===============================================
+
+PROBLEMA:
+---------
+psql no está instalado en el VPS y no tienes permisos para instalarlo.
+
+SOLUCIÓN:
+---------
+Usar un script Node.js que ejecuta las migraciones directamente.
+
+PASOS:
+======
+
+PASO 1: SUBIR EL SCRIPT AL VPS
+-------------------------------
+
+El archivo ejecutar-migraciones.js ya fue creado en:
+backend/ejecutar-migraciones.js
+
+Opciones para subirlo:
+
+A) Con Git (RECOMENDADO):
+   # En tu máquina local:
+   git add backend/ejecutar-migraciones.js
+   git commit -m "Add migration script"
+   git push
+
+   # En el VPS:
+   cd /home/usuario48/turismo/kawait_turismo/backend
+   git pull
+
+B) Con SCP:
+   scp backend/ejecutar-migraciones.js root@138.97.200.88:/home/usuario48/turismo/kawait_turismo/backend/
+
+C) Crear manualmente en el VPS:
+   Copia el contenido del archivo y créalo en el VPS
+
+
+PASO 2: EJECUTAR EL SCRIPT EN EL VPS
+-------------------------------------
+
+cd /home/usuario48/turismo/kawait_turismo/backend
+node ejecutar-migraciones.js
+
+Deberías ver:
+🔄 Conectando a la base de datos...
+✅ Conexión establecida correctamente
+
+🔄 Ejecutando migraciones...
+
+1. Agregando campos de tour personalizado...
+   ✅ Campos de tour personalizado agregados
+
+2. Haciendo tour_id opcional...
+   ✅ tour_id ahora es opcional
+
+3. Agregando campos adicionales...
+   ✅ Campos adicionales agregados
+
+4. Agregando campo de moneda...
+   ✅ Campo de moneda agregado
+
+5. Creando tabla reserva_clientes...
+   ✅ Tabla reserva_clientes creada
+
+6. Verificando columnas de la tabla reservas...
+
+📋 Columnas de la tabla reservas:
+   - id (integer) NOT NULL
+   - codigo (character varying) NOT NULL
+   - tour_id (integer) NULL
+   - tour_nombre (character varying) NULL
+   - tour_destino (character varying) NULL
+   - tour_descripcion (text) NULL
+   - fecha_inicio (date) NULL
+   - fecha_fin (date) NULL
+   - referencia (character varying) NULL
+   - descripcion (text) NULL
+   - fecha_reserva (date) NOT NULL
+   - cantidad_personas (integer) NOT NULL
+   - precio_unitario (numeric) NOT NULL
+   - moneda_precio_unitario (character varying) NOT NULL
+   - estado (USER-DEFINED) NOT NULL
+   - notas (text) NULL
+   - activo (boolean) NOT NULL
+   - created_at (timestamp with time zone) NOT NULL
+   - updated_at (timestamp with time zone) NOT NULL
+   - deleted_at (timestamp with time zone) NULL
+
+✅ ¡Todas las migraciones se ejecutaron correctamente!
+🔄 Ahora reinicia el backend con: pm2 restart backend
+
+
+PASO 3: REINICIAR EL BACKEND
+-----------------------------
+
+pm2 restart backend
+pm2 logs backend --lines 50
+
+
+PASO 4: VERIFICAR
+-----------------
+
+Accede a http://138.97.200.88:8084/reservas
+
+Los errores de "column does not exist" deben desaparecer.
+
+
+ALTERNATIVA: USAR DOCKER
+=========================
+
+Si tu base de datos está en Docker, puedes acceder así:
+
+# Ver contenedores corriendo
+docker ps
+
+# Acceder a PostgreSQL dentro del contenedor
+docker exec -it <nombre_contenedor_postgres> psql -U admin -d kawait_prod
+
+# Luego ejecutar los SQL manualmente:
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_nombre VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_destino VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_inicio DATE;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_fin DATE;
+ALTER TABLE reservas ALTER COLUMN tour_id DROP NOT NULL;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS referencia VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS moneda_precio_unitario VARCHAR(3) NOT NULL DEFAULT 'ARS';
+CREATE TABLE IF NOT EXISTS reserva_clientes (
+  id SERIAL PRIMARY KEY,
+  reserva_id INTEGER NOT NULL REFERENCES reservas(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_reserva_cliente UNIQUE (reserva_id, cliente_id)
+);
+
+# Salir
+\q
+
+
+TROUBLESHOOTING
+===============
+
+Error: "Cannot find module 'sequelize'"
+→ npm install sequelize pg pg-hstore
+
+Error: "Connection refused"
+→ Verificar que PostgreSQL esté corriendo:
+  docker ps | grep postgres
+  O: systemctl status postgresql
+
+Error: "password authentication failed"
+→ Verificar las variables de entorno en .env:
+  cat .env | grep -E 'POSTGRES|PROD_DB'
+
+Error: "database does not exist"
+→ Crear la base de datos primero (necesitas acceso a psql o Docker)
+
+
+RESUMEN DE COMANDOS
+====================
+
+# Subir el archivo (si usas Git)
+git add backend/ejecutar-migraciones.js
+git commit -m "Add migration script"
+git push
+
+# En el VPS
+cd /home/usuario48/turismo/kawait_turismo/backend
+git pull
+node ejecutar-migraciones.js
+pm2 restart backend
