@@ -1,0 +1,186 @@
+===============================================
+SOLUCIÓN AL ERROR DE SEQUELIZE CLI
+===============================================
+
+ERROR RECIBIDO:
+--------------
+ERROR: Error reading "config/config.js". Error: SyntaxError: Unexpected end of input
+
+CAUSA:
+------
+Sequelize CLI no encontraba el archivo .sequelizerc que le indica dónde
+están los archivos de configuración, modelos y migraciones.
+
+SOLUCIÓN:
+---------
+
+PASO 1: SUBIR EL ARCHIVO .sequelizerc AL VPS
+=============================================
+
+El archivo .sequelizerc ya fue creado en:
+backend/.sequelizerc
+
+Opciones para subirlo al VPS:
+
+A) Si usas Git (RECOMENDADO):
+   # En tu máquina local:
+   cd /ruta/al/proyecto
+   git add backend/.sequelizerc
+   git commit -m "Add .sequelizerc for Sequelize CLI"
+   git push
+
+   # En el VPS:
+   cd /home/usuario48/turismo/kawait_turismo/backend
+   git pull
+
+B) Si usas SCP:
+   # Desde tu máquina local:
+   scp backend/.sequelizerc root@138.97.200.88:/home/usuario48/turismo/kawait_turismo/backend/
+
+C) Crear manualmente en el VPS:
+   # En el VPS:
+   cd /home/usuario48/turismo/kawait_turismo/backend
+   cat > .sequelizerc << 'EOF'
+const path = require('path');
+
+module.exports = {
+  'config': path.resolve('config', 'config.js'),
+  'models-path': path.resolve('models'),
+  'seeders-path': path.resolve('migrations'),
+  'migrations-path': path.resolve('migrations')
+};
+EOF
+
+
+PASO 2: VERIFICAR VARIABLES DE ENTORNO EN EL VPS
+=================================================
+
+El archivo config.js usa variables de entorno para producción.
+Verifica que el .env tenga estas variables:
+
+cd /home/usuario48/turismo/kawait_turismo/backend
+cat .env | grep -E 'PROD_DB|NODE_ENV'
+
+Deberías tener:
+NODE_ENV=production
+PROD_DB_USER=admin
+PROD_DB_PASSWORD=postgres_35702
+PROD_DB_NAME=kawait_prod
+PROD_DB_HOST=localhost  # o la IP de tu base de datos
+PROD_DB_PORT=5432
+
+Si NO están, agrégalas al .env:
+cat >> .env << 'EOF'
+NODE_ENV=production
+PROD_DB_USER=admin
+PROD_DB_PASSWORD=postgres_35702
+PROD_DB_NAME=kawait_prod
+PROD_DB_HOST=localhost
+PROD_DB_PORT=5432
+EOF
+
+
+PASO 3: EJECUTAR LAS MIGRACIONES
+=================================
+
+Ahora sí, ejecuta las migraciones:
+
+cd /home/usuario48/turismo/kawait_turismo/backend
+npx sequelize-cli db:migrate
+
+Deberías ver:
+Sequelize CLI [Node: 18.19.1, CLI: 6.6.5, ORM: 6.37.7]
+
+Loaded configuration file "config/config.js".
+Using environment "production".
+== 20250106000000-add-tour-fields-to-reservas: migrating =======
+== 20250106000000-add-tour-fields-to-reservas: migrated (0.123s)
+== 20251118000000-update-reservas-table: migrating =======
+== 20251118000000-update-reservas-table: migrated (0.089s)
+== 20260110124400-add-moneda-precio-unitario-to-reservas: migrating =======
+== 20260110124400-add-moneda-precio-unitario-to-reservas: migrated (0.045s)
+
+
+PASO 4: VERIFICAR QUE SE APLICARON
+===================================
+
+npx sequelize-cli db:migrate:status
+
+Deberías ver todas las migraciones con "up":
+up 20250106000000-add-tour-fields-to-reservas.js
+up 20251118000000-update-reservas-table.js
+up 20260110124400-add-moneda-precio-unitario-to-reservas.js
+
+
+PASO 5: REINICIAR EL BACKEND
+=============================
+
+pm2 restart backend
+pm2 logs backend --lines 50
+
+
+ALTERNATIVA: SI SEQUELIZE CLI SIGUE DANDO PROBLEMAS
+====================================================
+
+Si después de crear el .sequelizerc sigue habiendo problemas,
+usa el script SQL manual:
+
+psql -U admin -d kawait_prod << 'EOF'
+-- Agregar campos de tour personalizado
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_nombre VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_destino VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_inicio DATE;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_fin DATE;
+
+-- Hacer tour_id opcional
+ALTER TABLE reservas ALTER COLUMN tour_id DROP NOT NULL;
+
+-- Agregar campos adicionales
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS referencia VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS descripcion TEXT;
+
+-- Agregar campo de moneda
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS moneda_precio_unitario VARCHAR(3) NOT NULL DEFAULT 'ARS';
+
+-- Crear tabla reserva_clientes
+CREATE TABLE IF NOT EXISTS reserva_clientes (
+  id SERIAL PRIMARY KEY,
+  reserva_id INTEGER NOT NULL REFERENCES reservas(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_reserva_cliente UNIQUE (reserva_id, cliente_id)
+);
+EOF
+
+pm2 restart backend
+
+
+VERIFICACIÓN FINAL
+==================
+
+1. Acceder a http://138.97.200.88:8084/reservas
+2. No deberías ver errores de "column does not exist"
+3. Las reservas deberían cargarse correctamente
+
+
+TROUBLESHOOTING
+===============
+
+Error: "Cannot find module 'dotenv'"
+→ npm install dotenv
+
+Error: "Access denied for user"
+→ Verificar PROD_DB_USER y PROD_DB_PASSWORD en .env
+
+Error: "database 'kawait_prod' does not exist"
+→ Crear la base de datos:
+  psql -U admin -c "CREATE DATABASE kawait_prod;"
+
+Error: "relation 'reservas' does not exist"
+→ Necesitas ejecutar TODAS las migraciones desde el principio:
+  npx sequelize-cli db:migrate
+
+Error: "column already exists"
+→ Normal si ejecutaste el SQL manual antes, ignóralo
