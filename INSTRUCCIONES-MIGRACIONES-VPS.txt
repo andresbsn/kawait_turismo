@@ -1,0 +1,185 @@
+===============================================
+INSTRUCCIONES PARA EJECUTAR MIGRACIONES EN VPS
+===============================================
+
+PROBLEMA:
+---------
+La base de datos en producción no tiene las columnas nuevas que se agregaron
+al modelo Reserva. Esto causa errores como:
+- "column Reserva.tour_nombre does not exist"
+- "column Reserva.moneda_precio_unitario does not exist"
+
+SOLUCIÓN:
+---------
+Ejecutar las migraciones pendientes en el VPS.
+
+
+OPCIÓN 1: USAR SEQUELIZE CLI (RECOMENDADO)
+===========================================
+
+Esta es la forma correcta y más segura de aplicar las migraciones.
+
+1. Conectarse al VPS por SSH:
+   ssh usuario@138.97.200.88
+
+2. Ir a la carpeta del backend:
+   cd /ruta/al/backend
+
+3. Verificar que existe el archivo .sequelizerc:
+   cat .sequelizerc
+
+   Si NO existe, créalo:
+   cat > .sequelizerc << 'EOF'
+   const path = require('path');
+
+   module.exports = {
+     'config': path.resolve('config', 'database.js'),
+     'models-path': path.resolve('models'),
+     'seeders-path': path.resolve('seeders'),
+     'migrations-path': path.resolve('migrations')
+   };
+   EOF
+
+4. Verificar las migraciones pendientes:
+   npx sequelize-cli db:migrate:status
+
+   Deberías ver algo como:
+   down 20250106000000-add-tour-fields-to-reservas.js
+   down 20251118000000-update-reservas-table.js
+   down 20260110124400-add-moneda-precio-unitario-to-reservas.js
+
+5. Ejecutar TODAS las migraciones pendientes:
+   npx sequelize-cli db:migrate
+
+   Deberías ver:
+   == 20250106000000-add-tour-fields-to-reservas: migrating =======
+   == 20250106000000-add-tour-fields-to-reservas: migrated (0.123s)
+   == 20251118000000-update-reservas-table: migrating =======
+   == 20251118000000-update-reservas-table: migrated (0.089s)
+   == 20260110124400-add-moneda-precio-unitario-to-reservas: migrating =======
+   == 20260110124400-add-moneda-precio-unitario-to-reservas: migrated (0.045s)
+
+6. Verificar que se aplicaron correctamente:
+   npx sequelize-cli db:migrate:status
+
+   Ahora TODAS deberían mostrar "up":
+   up 20250106000000-add-tour-fields-to-reservas.js
+   up 20251118000000-update-reservas-table.js
+   up 20260110124400-add-moneda-precio-unitario-to-reservas.js
+
+7. Reiniciar el backend:
+   pm2 restart backend
+   # O con docker:
+   docker-compose restart backend
+
+
+OPCIÓN 2: EJECUTAR SQL MANUALMENTE
+===================================
+
+Si Sequelize CLI no está disponible o da problemas, usa el script SQL.
+
+1. Conectarse al VPS por SSH:
+   ssh usuario@138.97.200.88
+
+2. Copiar el archivo EJECUTAR-MIGRACIONES-VPS.sql al VPS:
+   # Desde tu máquina local:
+   scp EJECUTAR-MIGRACIONES-VPS.sql usuario@138.97.200.88:/tmp/
+
+3. En el VPS, conectarse a PostgreSQL:
+   psql -U admin -d kawait_prod
+
+4. Ejecutar el script SQL:
+   \i /tmp/EJECUTAR-MIGRACIONES-VPS.sql
+
+   O copiar y pegar el contenido directamente en psql.
+
+5. Verificar que se crearon las columnas:
+   \d reservas
+
+   Deberías ver todas estas columnas:
+   - tour_nombre
+   - tour_destino
+   - tour_descripcion
+   - fecha_inicio
+   - fecha_fin
+   - referencia
+   - descripcion
+   - moneda_precio_unitario
+
+6. Salir de psql:
+   \q
+
+7. Reiniciar el backend:
+   pm2 restart backend
+
+
+VERIFICACIÓN FINAL
+==================
+
+1. Acceder a http://138.97.200.88:8084/reservas
+
+2. El error "column Reserva.tour_nombre does not exist" debe desaparecer
+
+3. Deberías poder ver la lista de reservas correctamente
+
+4. Verificar en los logs del backend:
+   pm2 logs backend --lines 50
+
+   NO deberías ver errores de "column does not exist"
+
+
+COLUMNAS QUE SE AGREGAN
+=======================
+
+Migración 20250106000000-add-tour-fields-to-reservas:
+- tour_nombre (VARCHAR)
+- tour_destino (VARCHAR)
+- tour_descripcion (TEXT)
+- fecha_inicio (DATE)
+- fecha_fin (DATE)
+- tour_id ahora es NULLABLE
+
+Migración 20251118000000-update-reservas-table:
+- referencia (VARCHAR)
+- descripcion (TEXT)
+- Tabla reserva_clientes (relación muchos a muchos)
+
+Migración 20260110124400-add-moneda-precio-unitario-to-reservas:
+- moneda_precio_unitario (VARCHAR(3), default 'ARS')
+
+
+TROUBLESHOOTING
+===============
+
+Error: "sequelize-cli: command not found"
+→ Instalar: npm install -g sequelize-cli
+→ O usar: npx sequelize-cli
+
+Error: "Cannot find module 'sequelize'"
+→ Instalar dependencias: npm install
+
+Error: "relation 'reservas' does not exist"
+→ La tabla reservas no existe, necesitas crear toda la base de datos
+→ Ejecutar: npx sequelize-cli db:migrate (ejecutará TODAS las migraciones)
+
+Error: "column already exists"
+→ Algunas columnas ya existen, el script SQL usa "IF NOT EXISTS"
+→ Esto es normal y seguro, continúa con el siguiente paso
+
+Error después de ejecutar migraciones:
+→ Verificar logs: pm2 logs backend
+→ Verificar que el backend se reinició correctamente
+→ Cerrar sesión y volver a loguearse en el frontend
+
+
+IMPORTANTE
+==========
+
+- Después de ejecutar las migraciones, DEBES reiniciar el backend
+- NO es necesario reconstruir el frontend
+- NO es necesario que los usuarios vuelvan a loguearse
+- Las migraciones son irreversibles (a menos que uses db:migrate:undo)
+- Siempre haz un backup de la base de datos antes de ejecutar migraciones en producción
+
+BACKUP DE LA BASE DE DATOS (RECOMENDADO):
+pg_dump -U admin -d kawait_prod > backup_antes_migraciones_$(date +%Y%m%d_%H%M%S).sql

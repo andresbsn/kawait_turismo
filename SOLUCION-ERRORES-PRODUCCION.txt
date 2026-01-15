@@ -1,0 +1,142 @@
+===============================================
+SOLUCIÓN A ERRORES EN PRODUCCIÓN
+===============================================
+
+ERRORES IDENTIFICADOS:
+---------------------
+
+1. ERROR EN RESERVAS:
+   "column Reserva.moneda_precio_unitario does not exist"
+   
+   CAUSA: La base de datos en producción no tiene la columna 'moneda_precio_unitario'
+          que fue agregada mediante una migración.
+
+2. ERROR EN USUARIOS:
+   Request a http://localhost:3001/api/usuarios
+   
+   CAUSA: Por determinar (necesito más información del error específico)
+
+
+SOLUCIÓN 1: EJECUTAR MIGRACIONES EN PRODUCCIÓN
+===============================================
+
+La columna 'moneda_precio_unitario' fue agregada mediante la migración:
+20260110124400-add-moneda-precio-unitario-to-reservas.js
+
+PASOS PARA APLICAR LA MIGRACIÓN EN EL VPS:
+
+1. Conectarse al VPS por SSH
+
+2. Ir a la carpeta del backend:
+   cd /ruta/al/backend
+
+3. Verificar que existe la carpeta de migraciones:
+   ls -la migrations/
+
+4. Ejecutar las migraciones pendientes:
+   npx sequelize-cli db:migrate
+
+   O si usas npm scripts:
+   npm run migrate
+
+5. Verificar que la migración se ejecutó correctamente:
+   npx sequelize-cli db:migrate:status
+
+   Deberías ver:
+   up 20260110124400-add-moneda-precio-unitario-to-reservas.js
+
+6. Reiniciar el backend:
+   pm2 restart backend
+   # O con docker:
+   docker-compose restart backend
+
+
+ALTERNATIVA: AGREGAR LA COLUMNA MANUALMENTE
+============================================
+
+Si no tienes Sequelize CLI configurado en producción, puedes agregar
+la columna manualmente con SQL:
+
+1. Conectarse a PostgreSQL:
+   psql -U admin -d kawait_prod
+
+2. Ejecutar el siguiente SQL:
+   ALTER TABLE reservas 
+   ADD COLUMN moneda_precio_unitario VARCHAR(3) 
+   NOT NULL DEFAULT 'ARS';
+
+3. Verificar que se agregó:
+   \d reservas
+
+4. Salir de psql:
+   \q
+
+5. Reiniciar el backend:
+   pm2 restart backend
+
+
+VERIFICACIÓN
+============
+
+Después de aplicar la solución:
+
+1. Acceder a http://138.97.200.88:8084/reservas
+
+2. El error "column Reserva.moneda_precio_unitario does not exist" 
+   debería desaparecer
+
+3. Deberías poder ver la lista de reservas correctamente
+
+
+SOLUCIÓN 2: ERROR EN USUARIOS
+==============================
+
+Para diagnosticar el error de usuarios, necesito más información:
+
+1. ¿Cuál es el error exacto que aparece en los logs del backend?
+   pm2 logs backend | grep usuarios
+
+2. ¿Qué código de estado HTTP devuelve? (401, 403, 500, etc.)
+
+3. ¿Aparece algún error en la consola del navegador (F12)?
+
+Posibles causas:
+- Error de autenticación (401) → El usuario no tiene permisos de ADMIN
+- Error de base de datos → Falta alguna columna en la tabla users
+- Error de CORS → El origen no está permitido
+
+
+COMANDOS ÚTILES
+===============
+
+# Ver logs del backend en tiempo real
+pm2 logs backend --lines 100
+
+# Ver estado de las migraciones
+npx sequelize-cli db:migrate:status
+
+# Conectarse a la base de datos
+psql -U admin -d kawait_prod
+
+# Ver estructura de la tabla reservas
+psql -U admin -d kawait_prod -c "\d reservas"
+
+# Ver todas las columnas de la tabla reservas
+psql -U admin -d kawait_prod -c "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'reservas';"
+
+# Reiniciar todos los servicios
+pm2 restart all
+
+
+IMPORTANTE
+==========
+
+Después de ejecutar las migraciones:
+1. NO es necesario que los usuarios vuelvan a loguearse
+2. NO es necesario reconstruir el frontend
+3. SOLO reiniciar el backend es suficiente
+
+Si el error persiste después de aplicar la migración:
+1. Verificar que la columna existe en la base de datos
+2. Verificar los logs del backend para ver el error exacto
+3. Verificar que el modelo Reserva.js esté actualizado en el servidor
