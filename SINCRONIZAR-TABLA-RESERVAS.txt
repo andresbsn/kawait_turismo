@@ -1,0 +1,206 @@
+===============================================
+SINCRONIZAR TABLA RESERVAS - LOCAL A VPS
+===============================================
+
+He creado una migración completa que sincroniza la tabla reservas del VPS
+con la estructura de tu modelo local.
+
+ARCHIVO CREADO:
+--------------
+backend/migrations/20260115000000-sync-reservas-table.js
+
+Esta migración agrega todos los campos faltantes:
+- tour_nombre
+- tour_destino
+- tour_descripcion
+- fecha_inicio
+- fecha_fin
+- referencia
+- descripcion
+- moneda_precio_unitario
+- Tabla reserva_clientes (relación muchos a muchos)
+
+
+OPCIÓN 1: SUBIR Y EJECUTAR LA MIGRACIÓN (RECOMENDADO)
+======================================================
+
+PASO 1: Subir la migración al VPS
+----------------------------------
+
+# En tu máquina local:
+git add backend/migrations/20260115000000-sync-reservas-table.js
+git add backend/.sequelizerc
+git commit -m "Add migration to sync reservas table"
+git push
+
+# En el VPS:
+cd /home/usuario48/turismo/kawait_turismo/backend
+git pull
+
+
+PASO 2: Ejecutar la migración con Node.js
+------------------------------------------
+
+Crea un script simple para ejecutar la migración:
+
+cd /home/usuario48/turismo/kawait_turismo/backend
+
+cat > ejecutar-sync.js << 'EOF'
+require('dotenv').config();
+const { Sequelize } = require('sequelize');
+
+const sequelize = new Sequelize(
+  process.env.POSTGRES_DB || 'kawait_prod',
+  process.env.POSTGRES_USER || 'admin',
+  process.env.POSTGRES_PASSWORD || 'postgres_35702',
+  {
+    host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT || 5432,
+    dialect: 'postgres',
+    logging: console.log
+  }
+);
+
+async function ejecutarSync() {
+  try {
+    console.log('🔄 Conectando a la base de datos...');
+    await sequelize.authenticate();
+    console.log('✅ Conexión establecida\n');
+
+    // Cargar y ejecutar la migración
+    const migration = require('./migrations/20260115000000-sync-reservas-table.js');
+    
+    console.log('🔄 Ejecutando sincronización de tabla reservas...\n');
+    await migration.up(sequelize.getQueryInterface(), Sequelize);
+    
+    console.log('\n✅ ¡Sincronización completada exitosamente!');
+    console.log('🔄 Ahora reinicia el backend: pm2 restart backend\n');
+  } catch (error) {
+    console.error('❌ Error:', error.message);
+    process.exit(1);
+  } finally {
+    await sequelize.close();
+  }
+}
+
+ejecutarSync();
+EOF
+
+# Ejecutar el script
+node ejecutar-sync.js
+
+# Reiniciar backend
+pm2 restart backend
+
+
+OPCIÓN 2: EJECUTAR SQL DIRECTAMENTE CON DOCKER
+===============================================
+
+Si prefieres ejecutar el SQL directamente:
+
+# Ver contenedores
+docker ps
+
+# Acceder a PostgreSQL (prueba estos comandos)
+docker exec -it postgres psql -U postgres -d kawait_prod
+# O:
+docker exec -it db psql -U postgres -d kawait_prod
+
+# Una vez dentro, ejecutar:
+ALTER TABLE reservas ALTER COLUMN tour_id DROP NOT NULL;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_nombre VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_destino VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_inicio DATE;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_fin DATE;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS referencia VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS moneda_precio_unitario VARCHAR(3) NOT NULL DEFAULT 'ARS';
+
+CREATE TABLE IF NOT EXISTS reserva_clientes (
+  id SERIAL PRIMARY KEY,
+  reserva_id INTEGER NOT NULL REFERENCES reservas(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_reserva_cliente UNIQUE (reserva_id, cliente_id)
+);
+
+\q
+
+# Reiniciar backend
+pm2 restart backend
+
+
+OPCIÓN 3: SI NO TIENES DOCKER - USAR SUDO
+==========================================
+
+Si PostgreSQL está instalado directamente en el sistema:
+
+# Conectarse como usuario postgres
+sudo -u postgres psql -d kawait_prod
+
+# Ejecutar los SQL de arriba
+# Luego salir con \q
+
+# Reiniciar backend
+pm2 restart backend
+
+
+VERIFICACIÓN
+============
+
+Después de ejecutar la sincronización:
+
+1. Verificar que no hay errores:
+   pm2 logs backend --lines 50
+
+2. Acceder a la aplicación:
+   http://138.97.200.88:8084/reservas
+
+3. Los errores de "column does not exist" deben desaparecer
+
+4. Verificar columnas en la base de datos (si tienes acceso):
+   \d reservas
+
+
+CAMPOS QUE SE AGREGAN
+=====================
+
+Según tu modelo Reserva.js local, estos son los campos que se agregarán:
+
+1. tour_nombre (VARCHAR) - Nombre del tour personalizado
+2. tour_destino (VARCHAR) - Destino del tour personalizado
+3. tour_descripcion (TEXT) - Descripción detallada
+4. fecha_inicio (DATE) - Fecha de inicio del tour
+5. fecha_fin (DATE) - Fecha de finalización del tour
+6. referencia (VARCHAR) - Código o referencia de la reserva
+7. descripcion (TEXT) - Detalles adicionales del viaje
+8. moneda_precio_unitario (VARCHAR(3)) - Moneda (ARS/USD)
+9. tour_id se hace NULLABLE - Ahora es opcional
+
+Tabla nueva:
+- reserva_clientes - Relación muchos a muchos entre reservas y clientes
+
+
+RESUMEN DE COMANDOS RÁPIDOS
+============================
+
+# Opción más simple - Ejecutar SQL con Docker:
+docker ps
+docker exec -it postgres psql -U postgres -d kawait_prod
+
+# Copiar y pegar todos estos SQL:
+ALTER TABLE reservas ALTER COLUMN tour_id DROP NOT NULL;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_nombre VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_destino VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_inicio DATE;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_fin DATE;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS referencia VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS moneda_precio_unitario VARCHAR(3) NOT NULL DEFAULT 'ARS';
+CREATE TABLE IF NOT EXISTS reserva_clientes (id SERIAL PRIMARY KEY, reserva_id INTEGER NOT NULL REFERENCES reservas(id) ON DELETE CASCADE, cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE, created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP, CONSTRAINT unique_reserva_cliente UNIQUE (reserva_id, cliente_id));
+
+\q
+pm2 restart backend

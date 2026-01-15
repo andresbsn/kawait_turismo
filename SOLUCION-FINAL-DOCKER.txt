@@ -1,0 +1,164 @@
+===============================================
+SOLUCIÓN FINAL - USAR DOCKER DIRECTAMENTE
+===============================================
+
+El problema es que las credenciales en el .env no coinciden con las
+credenciales reales de PostgreSQL. Probablemente PostgreSQL está en Docker.
+
+EJECUTA ESTOS COMANDOS EN EL VPS:
+==================================
+
+PASO 1: VER QUÉ CONTENEDORES ESTÁN CORRIENDO
+---------------------------------------------
+
+docker ps
+
+Busca un contenedor con "postgres" o "db" en el nombre.
+Copia el nombre o ID del contenedor.
+
+
+PASO 2: ACCEDER A POSTGRESQL DENTRO DEL CONTENEDOR
+---------------------------------------------------
+
+Prueba estos comandos (uno de ellos debería funcionar):
+
+# Opción 1: Si el contenedor se llama "postgres"
+docker exec -it postgres psql -U postgres -d kawait_prod
+
+# Opción 2: Si el contenedor se llama "db"
+docker exec -it db psql -U postgres -d kawait_prod
+
+# Opción 3: Con el usuario "admin"
+docker exec -it postgres psql -U admin -d kawait_prod
+
+# Opción 4: Usar el ID del contenedor (reemplaza CONTAINER_ID)
+docker exec -it CONTAINER_ID psql -U postgres -d kawait_prod
+
+# Opción 5: Si la base de datos se llama diferente
+docker exec -it postgres psql -U postgres -d postgres
+
+
+PASO 3: UNA VEZ DENTRO DE POSTGRESQL, EJECUTAR LOS SQL
+-------------------------------------------------------
+
+Cuando logres entrar (verás el prompt: kawait_prod=#), ejecuta:
+
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_nombre VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_destino VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_inicio DATE;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_fin DATE;
+ALTER TABLE reservas ALTER COLUMN tour_id DROP NOT NULL;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS referencia VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS moneda_precio_unitario VARCHAR(3) NOT NULL DEFAULT 'ARS';
+
+CREATE TABLE IF NOT EXISTS reserva_clientes (
+  id SERIAL PRIMARY KEY,
+  reserva_id INTEGER NOT NULL REFERENCES reservas(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE ON UPDATE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_reserva_cliente UNIQUE (reserva_id, cliente_id)
+);
+
+Deberías ver:
+ALTER TABLE
+ALTER TABLE
+ALTER TABLE
+...
+CREATE TABLE
+
+
+PASO 4: VERIFICAR QUE SE CREARON LAS COLUMNAS
+----------------------------------------------
+
+Dentro de psql, ejecuta:
+
+\d reservas
+
+Deberías ver todas las columnas, incluyendo las nuevas:
+- tour_nombre
+- tour_destino
+- tour_descripcion
+- fecha_inicio
+- fecha_fin
+- referencia
+- descripcion
+- moneda_precio_unitario
+
+
+PASO 5: SALIR DE POSTGRESQL
+----------------------------
+
+\q
+
+
+PASO 6: REINICIAR EL BACKEND
+-----------------------------
+
+pm2 restart backend
+pm2 logs backend --lines 50
+
+
+PASO 7: VERIFICAR EN EL NAVEGADOR
+----------------------------------
+
+Accede a: http://138.97.200.88:8084/reservas
+
+Los errores de "column does not exist" deben desaparecer.
+
+
+ALTERNATIVA: SI NO TIENES DOCKER
+=================================
+
+Si docker ps no muestra nada, entonces PostgreSQL está instalado
+directamente en el sistema. En ese caso:
+
+# Verificar si PostgreSQL está corriendo
+systemctl status postgresql
+
+# Ver qué usuario de PostgreSQL existe
+sudo -u postgres psql -c "\du"
+
+# Intentar conectarse como postgres
+sudo -u postgres psql -d kawait_prod
+
+# Luego ejecutar los SQL de arriba
+
+
+RESUMEN DE COMANDOS (COPIA Y PEGA)
+===================================
+
+# Ver contenedores
+docker ps
+
+# Acceder a PostgreSQL (prueba estos en orden hasta que uno funcione)
+docker exec -it postgres psql -U postgres -d kawait_prod
+docker exec -it db psql -U postgres -d kawait_prod
+docker exec -it postgres psql -U admin -d kawait_prod
+
+# Una vez dentro, ejecutar TODO esto:
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_nombre VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_destino VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS tour_descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_inicio DATE;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS fecha_fin DATE;
+ALTER TABLE reservas ALTER COLUMN tour_id DROP NOT NULL;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS referencia VARCHAR(255);
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS descripcion TEXT;
+ALTER TABLE reservas ADD COLUMN IF NOT EXISTS moneda_precio_unitario VARCHAR(3) NOT NULL DEFAULT 'ARS';
+CREATE TABLE IF NOT EXISTS reserva_clientes (
+  id SERIAL PRIMARY KEY,
+  reserva_id INTEGER NOT NULL REFERENCES reservas(id) ON DELETE CASCADE,
+  cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_reserva_cliente UNIQUE (reserva_id, cliente_id)
+);
+
+# Salir
+\q
+
+# Reiniciar backend
+pm2 restart backend
