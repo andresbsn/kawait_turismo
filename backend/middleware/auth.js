@@ -30,7 +30,7 @@ exports.checkAuth = async (req, res, next) => {
     console.log('✅ [AUTH] Token encontrado, verificando...');
 
     // Verificar el token
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tu_secreto_secreto');
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tu_super_secreto_jwt_cambiar_en_produccion');
     console.log('✅ [AUTH] Token verificado correctamente. Datos decodificados:', {
       id: decoded.id,
       tipo: decoded.tipo,

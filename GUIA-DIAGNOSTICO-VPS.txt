@@ -1,0 +1,188 @@
+===============================================
+GUÍA DE DIAGNÓSTICO - ERROR 401 EN PRODUCCIÓN
+===============================================
+
+Ya subiste los archivos e hiciste build, pero sigues con el error 401.
+Aquí está cómo diagnosticar el problema paso a paso:
+
+PASO 1: VERIFICAR QUE EL BACKEND TENGA LOS CAMBIOS
+===================================================
+
+Conéctate al VPS por SSH y ejecuta:
+
+cd /ruta/al/backend
+cat middleware/auth.js | grep "🔐 \[AUTH\]"
+
+Si ves las líneas con los emojis 🔐, significa que el código nuevo está en el servidor.
+Si NO las ves, necesitas subir los cambios nuevamente.
+
+
+PASO 2: VERIFICAR EL ARCHIVO .ENV DEL BACKEND
+==============================================
+
+En el VPS, ejecuta:
+
+cd /ruta/al/backend
+cat .env
+
+Verifica que tenga:
+✓ CORS_ORIGINS=http://138.97.200.88:8084,http://138.97.200.88:3004,http://138.97.200.88
+  (TODO EN UNA SOLA LÍNEA, sin saltos)
+✓ JWT_SECRET=tu_secreto_secreto
+✓ NODE_ENV=production
+
+
+PASO 3: REINICIAR EL BACKEND
+=============================
+
+Después de verificar el .env, DEBES reiniciar el backend:
+
+# Si usas PM2:
+pm2 restart backend
+pm2 logs backend --lines 50
+
+# Si usas Docker:
+docker-compose restart backend
+docker logs -f <nombre_contenedor_backend>
+
+# Si usas systemd:
+sudo systemctl restart backend
+sudo journalctl -u backend -f
+
+
+PASO 4: VERIFICAR LOS LOGS EN TIEMPO REAL
+==========================================
+
+Mientras los logs están corriendo, abre el navegador y:
+
+1. Abre DevTools (F12)
+2. Ve a la pestaña Network
+3. Intenta acceder a http://138.97.200.88:8084 (o donde esté tu frontend)
+4. Inicia sesión
+5. Intenta acceder a /api/reportes/finanzas
+
+En los logs del backend DEBERÍAS VER:
+
+✅ CASO EXITOSO:
+🔐 [AUTH] Verificando autenticación para: GET /api/reportes/finanzas
+🔐 [AUTH] Headers recibidos: { authorization: 'Presente', origin: '...', referer: '...' }
+✅ [AUTH] Token encontrado, verificando...
+✅ [AUTH] Token verificado correctamente
+✅ [AUTH] Usuario autenticado correctamente
+
+❌ CASO DE ERROR - Token no enviado:
+🔐 [AUTH] Verificando autenticación para: GET /api/reportes/finanzas
+🔐 [AUTH] Headers recibidos: { authorization: 'Ausente', origin: '...', referer: '...' }
+❌ [AUTH] No se encontró token en el header Authorization
+
+❌ CASO DE ERROR - Token expirado:
+🔐 [AUTH] Verificando autenticación para: GET /api/reportes/finanzas
+✅ [AUTH] Token encontrado, verificando...
+❌ [AUTH] Error en autenticación: { name: 'TokenExpiredError', message: 'jwt expired' }
+
+
+PASO 5: VERIFICAR EL FRONTEND
+==============================
+
+En el navegador, con DevTools abierto (F12):
+
+A) Verificar que el token esté guardado:
+   - Application → Local Storage → http://138.97.200.88:8084
+   - Buscar la key "token"
+   - Si NO existe, el usuario debe volver a loguearse
+
+B) Verificar que el token se envíe en las peticiones:
+   - Network → Click en la petición a /api/reportes/finanzas
+   - Headers → Request Headers
+   - Buscar: Authorization: Bearer eyJhbGc...
+   - Si NO existe, el frontend no está enviando el token
+
+C) Verificar la URL de la API:
+   - Console → Ejecutar: localStorage.getItem('token')
+   - Si es null, cerrar sesión y volver a loguearse
+
+
+PASO 6: VERIFICAR CONFIGURACIÓN DEL FRONTEND
+=============================================
+
+En el VPS, verifica el .env del frontend:
+
+cd /ruta/al/frontend
+cat .env
+
+Debe tener:
+VITE_API_URL=http://138.97.200.88:3004/api
+
+Si lo cambiaste, DEBES reconstruir el frontend:
+
+npm run build
+pm2 restart frontend
+# O con docker:
+docker-compose restart frontend
+
+
+PASO 7: SOLUCIONES SEGÚN EL ERROR
+==================================
+
+ERROR: "Token no encontrado"
+→ El frontend no está enviando el token
+→ Solución: Cerrar sesión y volver a loguearse
+
+ERROR: "Token expirado"
+→ El token tiene más de 24 horas
+→ Solución: Cerrar sesión y volver a loguearse
+
+ERROR: "Token inválido"
+→ El JWT_SECRET del backend cambió después de crear el token
+→ Solución: Todos los usuarios deben volver a loguearse
+
+ERROR: "CORS bloqueado"
+→ El origen del frontend no está en CORS_ORIGINS
+→ Solución: Agregar http://138.97.200.88:8084 a CORS_ORIGINS y reiniciar backend
+
+ERROR: No aparecen logs con 🔐
+→ El código nuevo no está en el servidor
+→ Solución: Hacer git pull y reiniciar el backend
+
+
+COMANDOS ÚTILES PARA COPIAR Y PEGAR
+====================================
+
+# Ver logs del backend en tiempo real
+pm2 logs backend --lines 100
+
+# Ver todas las variables de entorno
+cd /ruta/al/backend && cat .env
+
+# Reiniciar todo
+pm2 restart all
+
+# Ver qué procesos están corriendo
+pm2 list
+
+# Ver logs de errores específicamente
+pm2 logs backend --err --lines 50
+
+# Verificar que el puerto 3004 esté escuchando
+netstat -tlnp | grep 3004
+# O
+lsof -i :3004
+
+
+¿QUÉ INFORMACIÓN NECESITO DE TI?
+=================================
+
+Para ayudarte mejor, necesito que me digas:
+
+1. ¿Qué ves en los logs del backend cuando intentas acceder?
+   (Copia y pega las líneas que empiezan con 🔐 o ❌)
+
+2. ¿El token existe en localStorage del navegador?
+   (F12 → Application → Local Storage)
+
+3. ¿El token se envía en el header Authorization?
+   (F12 → Network → Click en la petición → Headers)
+
+4. ¿Reiniciaste el backend después de cambiar el .env?
+
+Con esta información podré decirte exactamente qué está fallando.
