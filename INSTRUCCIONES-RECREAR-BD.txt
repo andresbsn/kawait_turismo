@@ -1,0 +1,268 @@
+===============================================
+INSTRUCCIONES PARA RECREAR LA BASE DE DATOS
+===============================================
+
+He creado un script SQL completo que elimina y recrea toda la base de datos
+con la estructura correcta basada en tus modelos locales.
+
+ARCHIVO CREADO:
+--------------
+RECREAR-BASE-DATOS-COMPLETA.sql
+
+Este script incluye:
+✅ Todas las tablas con la estructura correcta
+✅ Todos los tipos ENUM necesarios
+✅ Todas las relaciones (Foreign Keys)
+✅ Índices para mejorar el rendimiento
+✅ Tabla sequelize_meta con migraciones registradas
+✅ Usuario admin por defecto
+
+
+IMPORTANTE - HACER BACKUP PRIMERO
+==================================
+
+Antes de ejecutar el script, DEBES hacer un backup de la base de datos actual:
+
+# Opción 1: Con Docker
+docker exec postgres pg_dump -U postgres kawait_prod > backup_kawait_$(date +%Y%m%d_%H%M%S).sql
+
+# Opción 2: Sin Docker
+pg_dump -U admin -d kawait_prod > backup_kawait_$(date +%Y%m%d_%H%M%S).sql
+
+# Opción 3: Con sudo
+sudo -u postgres pg_dump kawait_prod > backup_kawait_$(date +%Y%m%d_%H%M%S).sql
+
+
+OPCIÓN 1: EJECUTAR CON DOCKER (RECOMENDADO)
+============================================
+
+PASO 1: Subir el script al VPS
+-------------------------------
+
+# Desde tu máquina local:
+scp RECREAR-BASE-DATOS-COMPLETA.sql root@138.97.200.88:/tmp/
+
+# O con Git:
+git add RECREAR-BASE-DATOS-COMPLETA.sql
+git commit -m "Add complete database recreation script"
+git push
+
+# En el VPS:
+cd /home/usuario48/turismo/kawait_turismo
+git pull
+
+
+PASO 2: Detener el backend
+---------------------------
+
+pm2 stop backend
+
+
+PASO 3: Ejecutar el script con Docker
+--------------------------------------
+
+# Ver contenedores
+docker ps
+
+# Ejecutar el script (prueba estos comandos)
+docker exec -i postgres psql -U postgres < /tmp/RECREAR-BASE-DATOS-COMPLETA.sql
+
+# O si el contenedor se llama "db":
+docker exec -i db psql -U postgres < /tmp/RECREAR-BASE-DATOS-COMPLETA.sql
+
+# O acceder al contenedor y ejecutar:
+docker exec -it postgres psql -U postgres
+\i /tmp/RECREAR-BASE-DATOS-COMPLETA.sql
+\q
+
+
+PASO 4: Reiniciar el backend
+-----------------------------
+
+pm2 restart backend
+pm2 logs backend --lines 50
+
+
+OPCIÓN 2: EJECUTAR SIN DOCKER
+==============================
+
+Si PostgreSQL está instalado directamente en el sistema:
+
+# Detener backend
+pm2 stop backend
+
+# Ejecutar script
+sudo -u postgres psql < RECREAR-BASE-DATOS-COMPLETA.sql
+
+# O conectarse y ejecutar:
+sudo -u postgres psql
+\i /ruta/al/RECREAR-BASE-DATOS-COMPLETA.sql
+\q
+
+# Reiniciar backend
+pm2 restart backend
+
+
+OPCIÓN 3: EJECUTAR PASO A PASO (MÁS SEGURO)
+============================================
+
+Si prefieres ejecutar paso a paso para ver qué sucede:
+
+# Acceder a PostgreSQL
+docker exec -it postgres psql -U postgres
+
+# O sin Docker:
+sudo -u postgres psql
+
+# Ejecutar cada sección del script manualmente:
+
+-- 1. Hacer backup de datos importantes (si los hay)
+\copy (SELECT * FROM clientes) TO '/tmp/backup_clientes.csv' CSV HEADER;
+\copy (SELECT * FROM reservas) TO '/tmp/backup_reservas.csv' CSV HEADER;
+
+-- 2. Conectarse a postgres
+\c postgres
+
+-- 3. Terminar conexiones
+SELECT pg_terminate_backend(pg_stat_activity.pid)
+FROM pg_stat_activity
+WHERE pg_stat_activity.datname = 'kawait_prod'
+  AND pid <> pg_backend_pid();
+
+-- 4. Eliminar y recrear
+DROP DATABASE IF EXISTS kawait_prod;
+CREATE DATABASE kawait_prod;
+
+-- 5. Conectarse a la nueva base de datos
+\c kawait_prod
+
+-- 6. Copiar y pegar el resto del script desde PASO 2 en adelante
+
+
+VERIFICACIÓN
+============
+
+Después de recrear la base de datos:
+
+1. Verificar que las tablas se crearon:
+   docker exec -it postgres psql -U postgres -d kawait_prod -c "\dt"
+
+2. Verificar estructura de reservas:
+   docker exec -it postgres psql -U postgres -d kawait_prod -c "\d reservas"
+
+3. Verificar que el backend se conecta:
+   pm2 logs backend --lines 50
+
+4. Acceder a la aplicación:
+   http://138.97.200.88:8084
+
+5. Probar login con usuario admin:
+   Usuario: admin
+   Password: admin123
+
+
+TABLAS CREADAS
+==============
+
+El script crea estas tablas:
+1. usuarios - Usuarios del sistema
+2. clientes - Clientes que hacen reservas
+3. tours - Tours disponibles
+4. reservas - Reservas con TODOS los campos necesarios
+5. reserva_clientes - Relación muchos a muchos
+6. cuentas_corrientes - Cuentas de clientes
+7. cuotas - Cuotas de pago
+8. pagos - Registro de pagos
+9. categorias - Categorías de tours
+10. destinos - Destinos turísticos
+11. alojamientos - Alojamientos disponibles
+12. actividades - Actividades turísticas
+13. resenas - Reseñas de tours
+14. sequelize_meta - Control de migraciones
+
+
+CAMPOS DE LA TABLA RESERVAS
+============================
+
+La tabla reservas incluye TODOS estos campos:
+- id, codigo (único)
+- tour_id (opcional, puede ser NULL)
+- tour_nombre, tour_destino, tour_descripcion (para tours personalizados)
+- fecha_inicio, fecha_fin (fechas del tour)
+- referencia, descripcion (información adicional)
+- fecha_reserva, cantidad_personas
+- precio_unitario, moneda_precio_unitario (ARS/USD)
+- estado (pendiente/confirmada/cancelada/completada)
+- notas, activo
+- created_at, updated_at, deleted_at
+
+
+USUARIO ADMINISTRADOR
+=====================
+
+El script crea un usuario admin por defecto:
+- Usuario: admin
+- Email: admin@kawait.com
+- Password: admin123
+- Rol: ADMIN
+
+IMPORTANTE: Cambia la contraseña después del primer login.
+
+
+RESTAURAR DATOS (SI HICISTE BACKUP)
+====================================
+
+Si hiciste backup de los datos y quieres restaurarlos:
+
+# Restaurar desde backup completo
+docker exec -i postgres psql -U postgres -d kawait_prod < backup_kawait_20260115.sql
+
+# O restaurar tablas específicas desde CSV
+docker exec -i postgres psql -U postgres -d kawait_prod
+\copy clientes FROM '/tmp/backup_clientes.csv' CSV HEADER;
+\copy reservas FROM '/tmp/backup_reservas.csv' CSV HEADER;
+\q
+
+
+TROUBLESHOOTING
+===============
+
+Error: "database is being accessed by other users"
+→ Detener el backend primero: pm2 stop backend
+→ Ejecutar el comando para terminar conexiones del script
+
+Error: "permission denied"
+→ Usar sudo o ejecutar como usuario postgres
+
+Error: "relation already exists"
+→ El script ya se ejecutó, la base de datos ya está creada
+
+Error al conectar después de recrear:
+→ Verificar que las credenciales en .env sean correctas
+→ Verificar que el backend se reinició: pm2 restart backend
+
+Error: "column does not exist"
+→ Verificar que el script se ejecutó completamente
+→ Revisar logs: docker exec -it postgres psql -U postgres -d kawait_prod -c "\d reservas"
+
+
+RESUMEN DE COMANDOS RÁPIDOS
+============================
+
+# Hacer backup
+docker exec postgres pg_dump -U postgres kawait_prod > backup.sql
+
+# Copiar script al VPS
+scp RECREAR-BASE-DATOS-COMPLETA.sql root@138.97.200.88:/tmp/
+
+# Detener backend
+pm2 stop backend
+
+# Ejecutar script
+docker exec -i postgres psql -U postgres < /tmp/RECREAR-BASE-DATOS-COMPLETA.sql
+
+# Reiniciar backend
+pm2 restart backend
+
+# Verificar
+pm2 logs backend --lines 50
