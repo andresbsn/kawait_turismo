@@ -1,0 +1,16 @@
+Solución a "no existe la columna User.createdAt"
+
+El problema raíz era que al modelo `User` en `user.model.js` le faltaba la configuración `underscored: true`. Sin esto, Sequelize asume por defecto que las columnas se llaman `createdAt` y `updatedAt` (camelCase), pero en la base de datos PostgreSQL están como `created_at` y `updated_at` (snake_case).
+
+Correcciones aplicadas:
+1.  **backend/models/user.model.js**: Se agregó `underscored: true`. Esto le dice a Sequelize que mapee automáticamente los atributos de timestamp a sus contrapartes en snake_case.
+    *   *Efecto:* `User.createdAt` ahora apunta correctamente a la columna `created_at`.
+
+2.  **backend/services/usuario.service.js**: Se cambió el ordenamiento a `[['created_at', 'DESC']]` como solicitaste explícitamente.
+
+Pasos para VPS:
+1.  Subir `backend/models/user.model.js` (CRÍTICO: este define el mapeo correcto).
+2.  Subir `backend/services/usuario.service.js`.
+3.  Reiniciar el backend (`pm2 restart backend`).
+
+Con el cambio en el modelo, Sequelize generará la consulta SQL correcta buscando la columna `created_at` en lugar de `createdAt`.

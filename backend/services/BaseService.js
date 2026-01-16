@@ -21,7 +21,7 @@ class BaseService {
       limit,
       where = {},
       include = [],
-      order = [['createdAt', 'DESC']],
+      order = [['id', 'DESC']],
       attributes
     } = options;
 
@@ -107,7 +107,7 @@ class BaseService {
     const {
       where = {},
       include = [],
-      order = [['createdAt', 'DESC']],
+      order = [['id', 'DESC']],
       attributes,
       limit,
       offset

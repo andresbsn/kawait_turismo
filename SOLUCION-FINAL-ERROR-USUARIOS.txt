@@ -1,0 +1,17 @@
+Solución Definitiva al Error "no existe la columna User.createdAt"
+
+Descripción:
+A pesar de corregir el ordenamiento en el servicio de usuarios, el error persistía porque el servicio base (`BaseService.js`) tenía configurado por defecto ordenar por `createdAt`. Dado que el modelo de usuarios y la base de datos tienen discrepancias en cómo nombran esta columna (snake_case vs camelCase) y cómo Sequelize las mapea, la solución más robusta es cambiar el ordenamiento por defecto a `id`.
+
+Cambios realizados:
+1. `backend/services/usuario.service.js`: Se cambió explícitamente el ordenamiento a `[['id', 'DESC']]`.
+2. `backend/services/BaseService.js`: Se cambió el ordenamiento por defecto en `getAll` y `findAll` a `[['id', 'DESC']]`.
+
+Instrucciones para VPS:
+1. Subir los siguientes archivos modificados al servidor:
+   - `backend/services/usuario.service.js`
+   - `backend/services/BaseService.js`
+2. Reiniciar el backend:
+   `pm2 restart backend`
+
+Esto asegurará que todas las consultas por defecto se ordenen por ID (que siempre existe y es inequívoco), evitando el error de columna inexistente.

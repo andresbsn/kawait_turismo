@@ -8,7 +8,7 @@ module.exports = (sequelize, DataTypes) => {
       // Definir asociaciones aquí
       // Relación con Reserva eliminada ya que no existe usuario_id en la tabla reservas
     }
-    
+
     // Método para comparar contraseñas
     validPassword(password) {
       return bcrypt.compareSync(password, this.password);
@@ -99,6 +99,7 @@ module.exports = (sequelize, DataTypes) => {
     modelName: 'User',
     tableName: 'usuarios',
     timestamps: true,
+    underscored: true,
     paranoid: true,
     defaultScope: {
       attributes: { exclude: ['password'] }

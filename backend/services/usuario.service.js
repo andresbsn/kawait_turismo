@@ -25,7 +25,7 @@ class UsuarioService extends BaseService {
       attributes: {
         exclude: ['password']
       },
-      order: [['createdAt', 'DESC']]
+      order: [['created_at', 'DESC']]
     });
   }
 

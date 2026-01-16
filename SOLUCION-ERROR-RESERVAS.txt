@@ -1,0 +1,19 @@
+Solución al Error "column metodo_pago does not exist" en Reservas
+
+Descripción del problema:
+Al intentar crear una reserva, el sistema intenta guardar cuotas en la tabla `cuotas`, pero esta tabla en la base de datos del VPS no tiene la columna `metodo_pago` (y posiblemente `monto_pagado` o `fecha_pago`). Esto ocurre porque la estructura de la base de datos en producción no está sincronizada con el modelo de datos actual.
+
+Solución:
+Se ha creado un script para corregir la estructura de la tabla `cuotas` automáticamente.
+
+Pasos para aplicar en VPS:
+
+1. Subir el archivo `backend/scripts/fix_cuotas_table.js` al servidor (en la carpeta `backend/scripts`).
+2. Abrir una terminal en la carpeta `backend` del proyecto en el servidor.
+3. Ejecutar el script de corrección:
+   node scripts/fix_cuotas_table.js
+4. Reiniciar el backend para asegurar que tome cualquier cambio de cache si es necesario (opcional, pero recomendado):
+   pm2 restart backend
+
+Verificación:
+Intente crear una reserva nuevamente. El error debería haber desaparecido.
