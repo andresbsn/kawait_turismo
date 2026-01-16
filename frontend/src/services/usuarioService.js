@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Configuración de la URL base de la API
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const API_URL = `${API_BASE_URL}/api/usuarios`;
 
 console.log('API Base URL:', API_BASE_URL);
@@ -23,7 +23,7 @@ api.interceptors.request.use(
   (config) => {
     // Obtener el token del localStorage
     const token = localStorage.getItem('token');
-    
+
     // Si hay un token, añadirlo a los headers
     if (token) {
       config.headers = {
@@ -33,7 +33,7 @@ api.interceptors.request.use(
         'Accept': 'application/json'
       };
     }
-    
+
     // Log de depuración
     console.log('=== Petición ===');
     console.log('URL:', config.url);
@@ -45,7 +45,7 @@ api.interceptors.request.use(
     if (config.params) {
       console.log('Parámetros:', JSON.stringify(config.params, null, 2));
     }
-    
+
     return config;
   },
   (error) => {
@@ -65,13 +65,13 @@ api.interceptors.response.use(
   },
   (error) => {
     console.error('=== Error en la respuesta ===');
-    
+
     if (error.response) {
       // El servidor respondió con un código de error
       console.error('Status:', error.response.status);
       console.error('Datos del error:', error.response.data);
       console.error('Headers:', error.response.headers);
-      
+
       // Manejar errores de autenticación/autotización
       if (error.response.status === 401) {
         console.error('Error de autenticación: Token inválido o expirado');
@@ -81,7 +81,7 @@ api.interceptors.response.use(
         console.error('Error de autorización: Permisos insuficientes');
       }
       const { status, data } = error.response;
-      
+
       if (status === 401) {
         // No autorizado - redirigir al login
         localStorage.removeItem('token');
@@ -89,7 +89,7 @@ api.interceptors.response.use(
         window.location.href = '/login';
         return Promise.reject(new Error('Sesión expirada. Por favor, inicia sesión nuevamente.'));
       }
-      
+
       // Otros códigos de error
       const errorMessage = data?.message || `Error en la petición: ${status}`;
       return Promise.reject(new Error(errorMessage));
@@ -178,7 +178,7 @@ export const usuarioService = {
       console.log('Datos a enviar:', usuario);
       const url = `/api/usuarios/${id}`;
       console.log('URL de la petición:', url);
-      
+
       const response = await api.put(url, usuario);
       console.log('Respuesta del servidor:', response.data);
       return response.data;
