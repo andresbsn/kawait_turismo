@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_URL = `${import.meta.env.VITE_API_URL || ''}/api/cuentas-corrientes`;
+const rawBaseUrl = import.meta.env.VITE_API_URL || '';
+const baseUrl = rawBaseUrl.endsWith('/api') ? rawBaseUrl.slice(0, -4) : rawBaseUrl;
+const API_URL = `${baseUrl}/api/cuentas-corrientes`;
 
 const getAuthHeaders = () => {
   try {

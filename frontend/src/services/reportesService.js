@@ -1,6 +1,8 @@
 import axios from 'axios';
 
-const API_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:3001/api'}/reportes`;
+const rawBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const baseUrl = rawBaseUrl.endsWith('/api') ? rawBaseUrl.slice(0, -4) : rawBaseUrl;
+const API_URL = `${baseUrl}/api/reportes`;
 
 const getAuthHeaders = () => {
   try {
