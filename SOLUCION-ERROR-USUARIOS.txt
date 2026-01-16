@@ -1,0 +1,16 @@
+Solución al Error en la Página de Usuarios
+
+Descripción del problema:
+El error se producía al intentar acceder a la lista de usuarios (`/api/usuarios`). El servicio `usuario.service.js` intentaba ordenar los resultados utilizando la columna `created_at`. Sin embargo, en el modelo de usuario (`user.model.js`), no se define explícitamente un atributo con ese nombre (se usa el predeterminado `createdAt` que Sequelize mapea internamente).
+
+Aunque la columna en la base de datos sea `created_at`, Sequelize prefiere que se utilicen los nombres de los atributos del modelo en las consultas. Otros modelos (como Reserva) no daban error porque definían explícitamente `created_at` como atributo.
+
+Solución aplicada:
+Se modificó `backend/services/usuario.service.js` para ordenar por `createdAt` en lugar de `created_at`.
+
+Pasos para aplicar en VPS:
+1. Subir el archivo modificado `backend/services/usuario.service.js` al servidor.
+2. Reiniciar el backend (ej. `pm2 restart all` o `npm start`).
+
+Verificación:
+Acceda nuevamente a la página de usuarios. Debería cargar correctamente.
