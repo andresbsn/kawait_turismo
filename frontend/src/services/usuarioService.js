@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 // Configuración de la URL base de la API
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const rawBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = rawBaseUrl.endsWith('/api') ? rawBaseUrl.slice(0, -4) : rawBaseUrl;
 const API_URL = `${API_BASE_URL}/api/usuarios`;
 
 console.log('API Base URL:', API_BASE_URL);
