@@ -430,7 +430,7 @@ exports.generarComprobantePago = async (req, res) => {
 
     const getLogoDataUri = () => {
       try {
-        const logoPath = path.resolve(__dirname, '../../frontend/src/components/assets/logo.jpeg');
+        const logoPath = path.resolve(__dirname, '../assets/logo.jpeg');
         if (!fs.existsSync(logoPath)) return null;
         const buf = fs.readFileSync(logoPath);
         return `data:image/jpeg;base64,${buf.toString('base64')}`;
