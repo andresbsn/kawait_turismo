@@ -19,14 +19,14 @@ const corsOptions = {
     if (!origin) {
       return callback(null, true);
     }
-    
+
     // En desarrollo, permitir todos los orígenes localhost
     if (process.env.NODE_ENV !== 'production') {
       if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
         return callback(null, true);
       }
     }
-    
+
     // Verificar si el origin está en la lista de permitidos
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
@@ -50,7 +50,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Rutas
 app.get('/', (req, res) => {
-  res.json({ message: 'Bienvenido a la API de Kawait Turismo' });
+  res.json({ message: 'Bienvenido a la API de Kawai Turismo' });
 });
 
 // Importar rutas
@@ -91,7 +91,7 @@ const startServer = async () => {
   try {
     // Sincronizar la base de datos (solo verifica la conexión por defecto)
     await db.syncDatabase();
-    
+
     // Iniciar el servidor
     const server = app.listen(PORT, () => {
       console.log(`✅ Servidor corriendo en http://localhost:${PORT}`);

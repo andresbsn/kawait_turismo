@@ -234,12 +234,12 @@ const Sidebar = ({ collapsed, onCollapse }) => {
         <div className="flex items-center space-x-3">
           <img 
             src={logo} 
-            alt="Kawait Turismo" 
+            alt="Kawai Turismo" 
             className={`h-10 w-10 rounded-lg ${collapsed ? 'mx-auto' : ''}`}
           />
           {!collapsed && (
             <h1 className="text-xl font-bold bg-gradient-to-r from-primary-400 to-accent-400 bg-clip-text text-transparent">
-              Kawait Turismo
+              Kawai Turismo
             </h1>
           )}
         </div>

@@ -114,7 +114,7 @@ const Ajustes = () => {
               initialValues={{
                 nombre: 'Admin',
                 apellido: 'Principal',
-                email: 'admin@kawait.com',
+                email: 'admin@kawai.com',
                 telefono: '+1234567890',
                 biografia: 'Administrador principal del sistema',
               }}

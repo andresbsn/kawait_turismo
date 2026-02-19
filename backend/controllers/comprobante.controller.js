@@ -51,7 +51,7 @@ const generarComprobantePago = async (req, res) => {
     // Verificar que el usuario tenga permiso para ver este comprobante
     const esAdmin = req.usuario.rol === 'ADMIN';
     const esCliente = pago.CuentaCorrimento.Cliente.id === req.usuario.cliente_id;
-    
+
     if (!esAdmin && !esCliente) {
       return res.status(403).json({
         success: false,
@@ -88,13 +88,13 @@ const generarComprobantePago = async (req, res) => {
         estado: cuota.estado.toUpperCase()
       })),
       empresa: {
-        nombre: 'KAWAIT TURISMO',
+        nombre: 'KAWAI TURISMO',
         direccion: 'Av. Siempreviva 123, CABA, Argentina',
         telefono: '+54 11 1234-5678',
-        email: 'info@kawaitturismo.com',
+        email: 'info@kawaiturismo.com',
         cuit: '30-12345678-9',
         inicio_actividades: '01/01/2020',
-        logo: 'https://kawaitturismo.com/logo.png' // URL del logo de la empresa
+        logo: 'https://kawaiturismo.com/logo.png' // URL del logo de la empresa
       }
     };
 

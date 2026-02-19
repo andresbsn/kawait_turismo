@@ -14,15 +14,15 @@ const METODOS_PAGO = ['efectivo', 'transferencia', 'tarjeta_credito', 'tarjeta_d
  */
 exports.registrarPagoReserva = asyncHandler(async (req, res) => {
   const { reservaId } = req.params;
-  const { 
-    monto, 
-    metodo_pago, 
-    fecha_pago = new Date(), 
+  const {
+    monto,
+    metodo_pago,
+    fecha_pago = new Date(),
     observaciones = '',
     cliente_id,
     cuotas_ids = []
   } = req.body;
-  
+
   // Validar método de pago
   if (!METODOS_PAGO.includes(metodo_pago)) {
     throw new ValidationError(`Método de pago no válido. Debe ser uno de: ${METODOS_PAGO.join(', ')}`);
@@ -54,11 +54,11 @@ exports.registrarPagoReserva = asyncHandler(async (req, res) => {
       ],
       transaction
     });
-    
+
     if (!reserva) {
       throw new NotFoundError('Reserva no encontrada');
     }
-    
+
     // 2. Verificar que la reserva tenga cuentas corrientes
     if (!reserva.cuentas_corrientes || reserva.cuentas_corrientes.length === 0) {
       throw new ValidationError('La reserva no tiene cuentas corrientes asociadas');
@@ -67,12 +67,12 @@ exports.registrarPagoReserva = asyncHandler(async (req, res) => {
     // 3. Aplicar el pago a las cuentas corrientes
     const resultadosPago = [];
     let montoRestante = parseFloat(monto);
-    
+
     // Si se especificó un cliente, aplicar el pago solo a sus cuentas
-    const cuentasAAplicar = cliente_id 
+    const cuentasAAplicar = cliente_id
       ? reserva.cuentas_corrientes.filter(cc => cc.cliente_id === parseInt(cliente_id))
       : reserva.cuentas_corrientes;
-    
+
     if (cuentasAAplicar.length === 0) {
       throw new ValidationError('No se encontraron cuentas corrientes para el cliente especificado');
     }
@@ -94,7 +94,7 @@ exports.registrarPagoReserva = asyncHandler(async (req, res) => {
         if (montoRestante <= 0) break;
 
         const montoAPagar = Math.min(montoRestante, cuota.monto - (cuota.monto_abonado || 0));
-        
+
         if (montoAPagar > 0) {
           const nuevoMontoAbonado = (cuota.monto_abonado || 0) + montoAPagar;
           const estaPagada = nuevoMontoAbonado >= cuota.monto;
@@ -108,7 +108,7 @@ exports.registrarPagoReserva = asyncHandler(async (req, res) => {
           }, { transaction });
 
           montoRestante -= montoAPagar;
-          
+
           resultadosPago.push({
             cuenta_corriente_id: cuenta.id,
             cliente_id: cuenta.cliente_id,
@@ -126,7 +126,7 @@ exports.registrarPagoReserva = asyncHandler(async (req, res) => {
         .reduce((sum, r) => sum + r.monto_aplicado, 0);
 
       const nuevoSaldoCuenta = cuenta.saldo_pendiente - montoAplicadoACuenta;
-      
+
       await cuenta.update({
         monto_abonado: (cuenta.monto_abonado || 0) + montoAplicadoACuenta,
         saldo_pendiente: nuevoSaldoCuenta,
@@ -149,10 +149,10 @@ exports.registrarPagoReserva = asyncHandler(async (req, res) => {
       estado_pago: estaPagadaCompleto ? 'completo' : 'parcial',
       fecha_ultimo_pago: new Date()
     }, { transaction });
-    
+
     return { resultadosPago, montoRestante, reservaId };
   });
-  
+
   // 5. Obtener la reserva actualizada con toda su información
   const reservaActualizada = await Reserva.findByPk(resultado.reservaId, {
     include: [
@@ -174,7 +174,7 @@ exports.registrarPagoReserva = asyncHandler(async (req, res) => {
       }
     ]
   });
-  
+
   return success(res, {
     reserva: reservaActualizada,
     pagos_aplicados: resultado.resultadosPago,
@@ -211,16 +211,16 @@ exports.generarCuotasIniciales = async (cuentaCorriente, montoTotal, cantidadCuo
   if (montoRestante > 0 && cantidadCuotas > 0) {
     const montoCuota = montoRestante / cantidadCuotas;
     const fechaBase = montoSenia > 0 ? new Date() : new Date(cuentaCorriente.fecha_creacion || fechaActual);
-    
+
     for (let i = 0; i < cantidadCuotas; i++) {
       const fechaVencimiento = new Date(fechaBase);
       fechaVencimiento.setMonth(fechaVencimiento.getMonth() + i + 1);
-      
+
       // Si es la primera cuota y hay un monto inicial que cubre parte de ella
       const esPrimeraCuota = i === 0 && montoInicial > montoSenia;
       const montoAbonado = esPrimeraCuota ? montoInicial - montoSenia : 0;
       const estado = esPrimeraCuota && montoAbonado > 0 ? 'parcial' : 'pendiente';
-      
+
       cuotas.push({
         cuenta_corriente_id: cuentaCorriente.id,
         numero_cuota: cuotas.length + 1,
@@ -229,7 +229,7 @@ exports.generarCuotasIniciales = async (cuentaCorriente, montoTotal, cantidadCuo
         fecha_vencimiento: fechaVencimiento,
         estado: estado,
         es_senia: false,
-        ...(esPrimeraCuota && montoAbonado > 0 ? { 
+        ...(esPrimeraCuota && montoAbonado > 0 ? {
           fecha_pago: new Date(),
           metodo_pago: 'efectivo',
           observaciones: 'Pago inicial parcial'
@@ -242,7 +242,7 @@ exports.generarCuotasIniciales = async (cuentaCorriente, montoTotal, cantidadCuo
   if (cuotas.length > 0) {
     return await Cuota.bulkCreate(cuotas, { transaction });
   }
-  
+
   return [];
 };
 
@@ -291,7 +291,7 @@ exports.obtenerResumenPagos = async (req, res) => {
       const totalCliente = parseFloat(cc.monto_total || 0);
       const abonadoCliente = parseFloat(cc.monto_abonado || 0);
       const pendienteCliente = Math.max(0, totalCliente - abonadoCliente);
-      
+
       return {
         cliente_id: cc.cliente_id,
         cliente_nombre: cc.cliente ? `${cc.cliente.nombre} ${cc.cliente.apellido}` : 'Cliente no encontrado',
@@ -477,7 +477,7 @@ exports.generarComprobantePago = async (req, res) => {
     const rolUsuario = req.usuario?.role || req.usuario?.rol;
     const esAdmin = String(rolUsuario || '').toUpperCase().trim() === 'ADMIN';
     const esCliente = pago.cuenta_corriente?.cliente_id === req.usuario.cliente_id;
-    
+
     if (!esAdmin && !esCliente) {
       return res.status(403).json({
         success: false,
@@ -505,7 +505,7 @@ exports.generarComprobantePago = async (req, res) => {
       },
       reserva: {
         referencia: pago.cuenta_corriente?.reserva?.referencia || 'N/A',
-        fecha_reserva: pago.cuenta_corriente?.reserva?.fecha_reserva 
+        fecha_reserva: pago.cuenta_corriente?.reserva?.fecha_reserva
           ? new Date(pago.cuenta_corriente.reserva.fecha_reserva).toLocaleDateString('es-AR')
           : 'No especificada',
         monto_total: (parseFloat(pago.cuenta_corriente?.reserva?.precio_unitario || 0) * parseFloat(pago.cuenta_corriente?.reserva?.cantidad_personas || 0)) || 0,
@@ -519,7 +519,7 @@ exports.generarComprobantePago = async (req, res) => {
       }] : [],
       cheque: (pago.metodo_pago === 'cheque' || pago.metodo_pago === 'echq') ? (pago.extra || null) : null,
       empresa: {
-        nombre: 'KAWAIT TURISMO',
+        nombre: 'KAWAI TURISMO',
         direccion: 'Belgrano 990, Villa Ramallo, Buenos Aires',
         telefono: '3407415397',
         email: '',

@@ -12,8 +12,8 @@ Handlebars.registerHelper('formatDate', (dateString) => {
 
 Handlebars.registerHelper('formatCurrency', (value) => {
   if (value === undefined || value === null) return '$0.00';
-  return new Intl.NumberFormat('es-AR', { 
-    style: 'currency', 
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
     currency: 'ARS',
     minimumFractionDigits: 2
   }).format(value);
@@ -79,7 +79,7 @@ const createPdfFromHtml = async (templateName, data) => {
 
     // Generar el HTML
     const htmlContent = await generateHtml(templateName, data);
-    
+
     // Opciones para el PDF
     const options = {
       format: 'A4',
@@ -91,12 +91,14 @@ const createPdfFromHtml = async (templateName, data) => {
       },
       printBackground: true,
       preferCSSPageSize: true,
-      timeout: 30000 // 30 segundos de timeout
+      timeout: 30000,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || null
     };
 
     // Crear archivo temporal con el HTML
     const tempHtmlFile = await createTempFile('comprobante-', '.html', htmlContent);
-    
+
     try {
       // Generar el PDF
       const pdfBuffer = await htmlToPdf.generatePdf({ url: `file://${tempHtmlFile}` }, options);

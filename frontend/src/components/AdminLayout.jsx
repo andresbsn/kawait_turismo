@@ -9,7 +9,7 @@ const AdminLayout = () => {
   // Establecer el idioma de la página a español
   useEffect(() => {
     document.documentElement.lang = 'es';
-    document.title = 'Kawait Turismo - Panel de Administración';
+    document.title = 'Kawai Turismo - Panel de Administración';
   }, [location]);
 
   return (
