@@ -10,13 +10,13 @@ const { NotFoundError, ValidationError } = require('../middlewares/errorHandler'
 const calcularFechasVencimiento = (fechaInicio, cantidadCuotas) => {
   const fechas = [];
   const fecha = new Date(fechaInicio);
-  
+
   for (let i = 1; i <= cantidadCuotas; i++) {
     const nuevaFecha = new Date(fecha);
     nuevaFecha.setMonth(nuevaFecha.getMonth() + i);
     fechas.push(nuevaFecha.toISOString().split('T')[0]);
   }
-  
+
   return fechas;
 };
 
@@ -163,7 +163,11 @@ class ReservaService extends BaseService {
       tour_descripcion,
       fecha_inicio,
       fecha_fin,
-      moneda_precio_unitario
+      moneda_precio_unitario,
+      modalidad_pago = 'cuotas',
+      fecha_vencimiento_hotel,
+      requisitos_ingresos,
+      condiciones_generales
     } = data;
 
     // Validar que se proporcione un tour_id o datos de tour personalizado
@@ -201,6 +205,9 @@ class ReservaService extends BaseService {
       notas,
       monto_seña,
       tipo_pago,
+      fecha_vencimiento_hotel: data.fecha_vencimiento_hotel || null,
+      requisitos_ingresos: data.requisitos_ingresos || null,
+      condiciones_generales: data.condiciones_generales || null,
       ...(!tour_id && {
         tour_nombre,
         tour_destino,
@@ -220,7 +227,7 @@ class ReservaService extends BaseService {
     }
 
     // Crear cuenta corriente + cuotas
-    await this._crearCuentaCorriente(reserva, titularClienteDB, monto_seña, cantidad_cuotas, fecha_pago, transaction);
+    await this._crearCuentaCorriente(reserva, titularClienteDB, monto_seña, modalidad_pago === 'sin_cuotas' ? 0 : cantidad_cuotas, fecha_pago, transaction);
 
     return reserva.id;
   }
@@ -247,7 +254,10 @@ class ReservaService extends BaseService {
       tour_descripcion,
       fecha_inicio,
       fecha_fin,
-      moneda_precio_unitario
+      moneda_precio_unitario,
+      fecha_vencimiento_hotel,
+      requisitos_ingresos,
+      condiciones_generales
     } = data;
 
     const reserva = await Reserva.findByPk(id, { transaction });
@@ -281,6 +291,9 @@ class ReservaService extends BaseService {
       ...(descripcion !== undefined && { descripcion }),
       ...(monto_seña !== undefined && { monto_seña }),
       ...(tipo_pago && { tipo_pago }),
+      ...(data.fecha_vencimiento_hotel !== undefined && { fecha_vencimiento_hotel: data.fecha_vencimiento_hotel }),
+      ...(data.requisitos_ingresos !== undefined && { requisitos_ingresos: data.requisitos_ingresos }),
+      ...(data.condiciones_generales !== undefined && { condiciones_generales: data.condiciones_generales }),
       ...(!tour_id && {
         tour_nombre,
         tour_destino,
@@ -442,6 +455,18 @@ class ReservaService extends BaseService {
       }));
 
       await Cuota.bulkCreate(cuotas, { transaction });
+    } else if (montoTotalCalculado && cantidad_cuotas === 0) {
+      // Modalidad "sin cuotas" - solo cuenta corriente, sin cuotas
+      await CuentaCorriente.create({
+        reserva_id: reserva.id,
+        cliente_id: titular.id,
+        monto_total: montoTotalCalculado,
+        saldo_pendiente: Math.max(0, montoTotalCalculado - montoSenaNumber),
+        cantidad_cuotas: 0,
+        estado: 'pendiente',
+        fecha_creacion: new Date(),
+        fecha_actualizacion: new Date()
+      }, { transaction });
     }
   }
 
@@ -462,7 +487,7 @@ class ReservaService extends BaseService {
     if (!cuentaCorriente) {
       const clientesReserva = await reserva.getClientes({ transaction });
       const titular = Array.isArray(clientesReserva) && clientesReserva.length > 0 ? clientesReserva[0] : null;
-      
+
       if (!titular) {
         throw new ValidationError('No se pudo determinar el cliente titular para generar la cuenta corriente');
       }

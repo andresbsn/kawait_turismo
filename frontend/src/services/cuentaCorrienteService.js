@@ -80,3 +80,66 @@ export const getMisCuentasCorrientes = async () => {
     throw error;
   }
 };
+
+export const registrarEntrega = async (cuentaId, data, archivo) => {
+  try {
+    let body;
+    let headers = { ...getAuthHeaders() };
+
+    if (archivo) {
+      // Enviar como FormData cuando hay archivo adjunto
+      body = new FormData();
+      body.append('monto', data.monto);
+      body.append('metodo_pago', data.metodo_pago);
+      if (data.observaciones) body.append('observaciones', data.observaciones);
+      if (data.extra) body.append('extra', JSON.stringify(data.extra));
+      body.append('comprobante', archivo);
+      // No poner Content-Type, axios lo setea automáticamente con boundary
+    } else {
+      body = data;
+      headers['Content-Type'] = 'application/json';
+    }
+
+    const response = await axios.post(
+      `${API_URL}/${cuentaId}/entrega`,
+      body,
+      { headers, withCredentials: true }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error al registrar la entrega:', error);
+    throw error;
+  }
+};
+
+export const getPagosCuenta = async (cuentaId) => {
+  try {
+    const response = await axios.get(`${API_URL}/${cuentaId}/pagos`, {
+      headers: { ...getAuthHeaders() },
+      withCredentials: true
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error al obtener los pagos de la cuenta:', error);
+    throw error;
+  }
+};
+
+export const getComprobanteUrl = (pagoId) => {
+  return `${API_URL}/pago/${pagoId}/comprobante`;
+};
+
+export const descargarComprobante = async (pagoId) => {
+  try {
+    const response = await axios.get(`${API_URL}/pago/${pagoId}/comprobante`, {
+      headers: { ...getAuthHeaders() },
+      withCredentials: true,
+      responseType: 'blob'
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error al descargar el comprobante:', error);
+    throw error;
+  }
+};
+

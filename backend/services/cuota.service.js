@@ -114,6 +114,92 @@ class CuotaService extends BaseService {
   }
 
   /**
+   * Registrar una entrega libre (sin cuota) sobre una cuenta corriente sin cuotas
+   */
+  async registrarEntrega(cuentaCorrienteId, data, usuarioId, transaction, file) {
+    const { monto, metodo_pago, observaciones } = data;
+    let { extra } = data;
+
+    // Si extra viene como string (desde FormData), parsearlo
+    if (typeof extra === 'string') {
+      try { extra = JSON.parse(extra); } catch (e) { extra = null; }
+    }
+
+    // Validar método de pago
+    if (!METODOS_PAGO.includes(metodo_pago)) {
+      throw new ValidationError(`Método de pago no válido. Debe ser uno de: ${METODOS_PAGO.join(', ')}`);
+    }
+
+    const cuenta = await CuentaCorriente.findByPk(cuentaCorrienteId, { transaction });
+
+    if (!cuenta) {
+      throw new NotFoundError('Cuenta corriente no encontrada');
+    }
+
+    // Validar que la cuenta sea modalidad sin cuotas
+    if (cuenta.cantidad_cuotas > 0) {
+      throw new ValidationError('Esta cuenta corriente tiene cuotas. Use el registro de pago por cuota.');
+    }
+
+    const saldoPendiente = parseFloat(cuenta.saldo_pendiente || 0);
+    if (parseFloat(monto) > saldoPendiente) {
+      throw new ValidationError(`El monto de la entrega ($${monto}) no puede ser mayor al saldo pendiente ($${saldoPendiente})`);
+    }
+
+    if (parseFloat(monto) <= 0) {
+      throw new ValidationError('El monto debe ser mayor a 0');
+    }
+
+    // Validación de extra para cheque/echq
+    if ((metodo_pago === 'cheque' || metodo_pago === 'echq') && extra && typeof extra !== 'object') {
+      throw new ValidationError('El campo extra debe ser un objeto JSON');
+    }
+
+    // Actualizar saldo de la cuenta corriente
+    const nuevoSaldo = saldoPendiente - parseFloat(monto);
+    let nuevoEstado = cuenta.estado;
+
+    if (nuevoSaldo <= 0) {
+      nuevoEstado = 'pagado';
+    } else if (nuevoSaldo < parseFloat(cuenta.monto_total)) {
+      nuevoEstado = 'en_proceso';
+    }
+
+    await cuenta.update({
+      saldo_pendiente: nuevoSaldo,
+      estado: nuevoEstado
+    }, { transaction });
+
+    // Calcular correlativo y crear Pago (sin cuota_id)
+    const maxCorrelativo = await Pago.max('correlativo', { transaction });
+    const correlativo = (maxCorrelativo || 0) + 1;
+
+    // Ruta del comprobante de transferencia (si se adjuntó archivo)
+    let comprobanteTransferencia = null;
+    if (file && metodo_pago === 'transferencia') {
+      comprobanteTransferencia = `comprobantes/${file.filename}`;
+    }
+
+    const pago = await Pago.create({
+      correlativo,
+      numero_comprobante: buildNumeroComprobante(correlativo),
+      cuenta_corriente_id: cuenta.id,
+      cuota_id: null,
+      cliente_id: cuenta.cliente_id,
+      usuario_id: usuarioId || null,
+      monto: parseFloat(monto),
+      metodo_pago,
+      fecha_pago: new Date(),
+      observaciones: observaciones || null,
+      extra: extra || null,
+      comprobante_transferencia: comprobanteTransferencia,
+      fecha_creacion: new Date()
+    }, { transaction });
+
+    return { pago, cuentaCorrienteId };
+  }
+
+  /**
    * Actualizar una cuota
    */
   async actualizarCuota(cuotaId, data, transaction) {

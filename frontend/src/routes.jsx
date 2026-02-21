@@ -16,6 +16,7 @@ const AdminClientes = lazy(() => import('./pages/admin/clientes/Clientes'));
 const CuentasCorrientesPage = lazy(() => import('./pages/CuentasCorrientesPage'));
 const CuentaCorrienteDetalle = lazy(() => import('./pages/admin/cuentasCorrientes/CuentaCorrienteDetalle'));
 const AdminReportes = lazy(() => import('./pages/admin/reportes'));
+const AdminGastos = lazy(() => import('./pages/admin/gastos'));
 const UserDashboard = lazy(() => import('./pages/user/dashboard'));
 const UserLayout = lazy(() => import('./pages/user/UserLayout'));
 const MisCuentasCorrientes = lazy(() => import('./pages/user/cuentaCorriente/MisCuentasCorrientes'));
@@ -128,6 +129,14 @@ const router = createBrowserRouter([
         ]
       },
       { path: 'perfil', element: <LazyComponent component={UserProfile} /> },
+      {
+        path: 'gastos',
+        element: (
+          <ProtectedRoute allowedRoles={['ADMIN']}>
+            <LazyComponent component={AdminGastos} />
+          </ProtectedRoute>
+        )
+      },
     ],
   },
 

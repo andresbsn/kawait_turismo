@@ -63,8 +63,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     cuota_id: {
       type: DataTypes.INTEGER,
-      allowNull: false,
-      unique: true,
+      allowNull: true,
       references: {
         model: 'cuotas',
         key: 'id'
@@ -130,6 +129,11 @@ module.exports = (sequelize, DataTypes) => {
     extra: {
       type: DataTypes.JSONB,
       allowNull: true
+    },
+    comprobante_transferencia: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Ruta del archivo del comprobante de transferencia adjuntado por el cliente'
     },
     fecha_creacion: {
       type: DataTypes.DATE,

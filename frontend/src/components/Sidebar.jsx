@@ -11,7 +11,8 @@ import {
   CalendarIcon,
   MapIcon,
   ChevronLeftIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  CurrencyDollarIcon
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 import { authService } from '../config/api';
@@ -167,6 +168,13 @@ const Sidebar = ({ collapsed, onCollapse }) => {
           href: '/admin/reportes',
           icon: ChartBarIcon,
           current: location.pathname.startsWith('/admin/reportes'),
+          roles: ['ADMIN']
+        },
+        {
+          name: 'Gastos',
+          href: '/admin/gastos',
+          icon: CurrencyDollarIcon,
+          current: location.pathname.startsWith('/admin/gastos'),
           roles: ['ADMIN']
         }
       );

@@ -4,6 +4,8 @@ const router = express.Router();
 const reservaController = require('../controllers/reserva.controller');
 const { validarCampos } = require('../middlewares/validar-campos');
 const { authenticateToken, authorize } = require('../middlewares/auth.middleware');
+const reservaAdjuntoController = require('../controllers/reservaAdjunto.controller');
+const { upload } = require('../middlewares/upload.middleware');
 
 const ensureHandler = (handlerName) => {
   const handler = reservaController?.[handlerName];
@@ -140,5 +142,11 @@ router.delete('/:id', [
     next();
   }
 ], ensureHandler('eliminarReserva'));
+
+// Rutas para adjuntos
+router.post('/:id/adjuntos', upload.single('archivo'), reservaAdjuntoController.uploadAttachment);
+router.get('/:id/adjuntos', reservaAdjuntoController.getAttachments);
+router.delete('/:id/adjuntos/:adjuntoId', reservaAdjuntoController.deleteAttachment);
+router.get('/:id/adjuntos/:adjuntoId/download', reservaAdjuntoController.downloadAttachment);
 
 module.exports = router;

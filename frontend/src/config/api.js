@@ -17,13 +17,13 @@ export const handleResponse = async (response) => {
   // Verificar si la respuesta es un JSON válido
   const contentType = response.headers.get('content-type');
   let data;
-  
+
   try {
     data = contentType?.includes('application/json') ? await response.json() : {};
   } catch (error) {
     data = {};
   }
-  
+
   if (!response.ok) {
     // Si la respuesta es 401 (No autorizado), limpiar la autenticación
     if (response.status === 401) {
@@ -36,14 +36,14 @@ export const handleResponse = async (response) => {
         }
       });
     }
-    
+
     // Lanzar error con el mensaje del servidor
     const error = new Error(data.message || `Error en la petición (${response.status})`);
     error.status = response.status;
     error.data = data;
     throw error;
   }
-  
+
   return data;
 };
 
@@ -57,7 +57,7 @@ const getAuthHeaders = () => {
         .split('; ')
         .find(row => row.startsWith('token='))
         ?.split('=')[1];
-      
+
       if (cookieToken) {
         localStorage.setItem('token', cookieToken);
         return { 'Authorization': `Bearer ${cookieToken}` };
@@ -95,14 +95,14 @@ export const apiClient = {
         }
       });
     }
-    
+
     const fullUrl = queryParams.toString() ? `${url}?${queryParams}` : url;
 
     console.log('🌐 Realizando petición GET a:', fullUrl, { config });
 
     try {
       const response = await fetch(fullUrl, config);
-      
+
       if (!response.ok) {
         let errorData;
         try {
@@ -110,7 +110,7 @@ export const apiClient = {
         } catch (e) {
           errorData = { message: await response.text() };
         }
-        
+
         console.error(`❌ Error en la respuesta del servidor (${response.status}):`, {
           status: response.status,
           statusText: response.statusText,
@@ -118,14 +118,14 @@ export const apiClient = {
           error: errorData,
           headers: Object.fromEntries(response.headers.entries())
         });
-        
+
         const error = new Error(errorData.message || `Error en la petición: ${response.statusText}`);
         error.status = response.status;
         error.data = errorData;
         error.response = response;
         throw error;
       }
-      
+
       return await handleResponse(response);
     } catch (error) {
       console.error(`❌ Error en la petición GET a ${fullUrl}:`, {
@@ -142,17 +142,17 @@ export const apiClient = {
           }
         }
       });
-      
+
       if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
         const networkError = new Error('No se pudo conectar con el servidor. Verifica tu conexión a internet o si el servidor está en ejecución.');
         networkError.isNetworkError = true;
         throw networkError;
       }
-      
+
       throw error;
     }
   },
-  
+
   post: async (endpoint, data, options = {}) => {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...defaultConfig,
@@ -165,10 +165,10 @@ export const apiClient = {
       },
       body: JSON.stringify(data),
     });
-    
+
     return handleResponse(response);
   },
-  
+
   put: async (endpoint, data, options = {}) => {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...defaultConfig,
@@ -181,10 +181,10 @@ export const apiClient = {
       },
       body: JSON.stringify(data),
     });
-    
+
     return handleResponse(response);
   },
-  
+
   delete: async (endpoint, options = {}) => {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...defaultConfig,
@@ -196,7 +196,7 @@ export const apiClient = {
         ...options.headers,
       },
     });
-    
+
     return handleResponse(response);
   },
 };
@@ -210,11 +210,11 @@ export const authService = {
   loginCliente: async (email, dni) => {
     return apiClient.post('/auth/login-cliente', { email, dni });
   },
-  
+
   logout: async () => {
     return apiClient.post('/auth/logout');
   },
-  
+
   getCurrentUser: async () => {
     return apiClient.get('/auth/me');
   },
@@ -226,19 +226,19 @@ export const userService = {
     const query = new URLSearchParams(params).toString();
     return apiClient.get(`/users${query ? `?${query}` : ''}`);
   },
-  
+
   getUser: async (userId) => {
     return apiClient.get(`/users/${userId}`);
   },
-  
+
   createUser: async (userData) => {
     return apiClient.post('/users', userData);
   },
-  
+
   updateUser: async (userId, userData) => {
     return apiClient.put(`/users/${userId}`, userData);
   },
-  
+
   deleteUser: async (userId) => {
     return apiClient.delete(`/users/${userId}`);
   },
@@ -251,16 +251,16 @@ export const tourService = {
     try {
       // Asegurarse de que los parámetros de paginación tengan valores por defecto
       const { page = 1, limit = 10, ...filters } = params;
-      
+
       // Construir la URL con los parámetros de consulta
       const queryParams = new URLSearchParams({
         page,
         limit,
         ...filters
       });
-      
+
       const response = await apiClient.get(`/tours?${queryParams}`);
-      
+
       // La respuesta ya contiene los tours y la información de paginación
       return {
         success: true,
@@ -279,13 +279,13 @@ export const tourService = {
       };
     }
   },
-  
+
   // Obtener un tour por ID
   async obtenerTourPorId(id) {
     try {
       const response = await apiClient.get(`/tours/${id}`);
       console.log('antes de pasar al compoente', response);
-      
+
       return {
         success: true,
         tour: response.tour
@@ -298,7 +298,7 @@ export const tourService = {
       };
     }
   },
-  
+
   // Crear un nuevo tour
   async crearTour(tourData) {
     try {
@@ -316,7 +316,7 @@ export const tourService = {
       };
     }
   },
-  
+
   // Actualizar un tour existente
   async actualizarTour(id, tourData) {
     try {
@@ -334,7 +334,7 @@ export const tourService = {
       };
     }
   },
-  
+
   // Eliminar un tour
   async eliminarTour(id) {
     try {
@@ -351,28 +351,28 @@ export const tourService = {
       };
     }
   },
-  
+
   // Métodos adicionales para compatibilidad
   getTours: async (params = {}) => {
     const result = await tourService.obtenerTours(params);
     return result.tours || [];
   },
-  
+
   getTour: async (tourId) => {
     const result = await tourService.obtenerTourPorId(tourId);
     return result.tour;
   },
-  
+
   createTour: async (tourData) => {
     const result = await tourService.crearTour(tourData);
     return result.tour;
   },
-  
+
   updateTour: async (tourId, tourData) => {
     const result = await tourService.actualizarTour(tourId, tourData);
     return result.tour;
   },
-  
+
   deleteTour: async (tourId) => {
     const result = await tourService.eliminarTour(tourId);
     return result.success;
@@ -385,8 +385,8 @@ export const clienteService = {
   buscarClientes: async (busqueda) => {
     try {
       console.log('🔍 Buscando clientes con término:', busqueda);
-      const response = await apiClient.get('/clientes/buscar', { 
-        params: { 
+      const response = await apiClient.get('/clientes/buscar', {
+        params: {
           busqueda: busqueda || ''
         }
       });
@@ -419,7 +419,7 @@ export const clienteService = {
       throw error;
     }
   },
-  
+
   // Obtener lista de clientes
   getClientes: async (params = {}) => {
     try {
@@ -477,14 +477,14 @@ export const bookingService = {
       fechaInicio: params.fechaInicio,
       fechaFin: params.fechaFin
     };
-    
+
     const query = new URLSearchParams();
     Object.entries(apiParams).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
         query.append(key, value);
       }
     });
-    
+
     const response = await apiClient.get(`/reservas?${query.toString()}`);
 
     // Asegurarse de que la respuesta tenga el formato esperado
@@ -502,7 +502,7 @@ export const bookingService = {
   obtenerReservas: async (params = {}) => {
     return bookingService.getBookings(params);
   },
-  
+
   getBooking: async (bookingId) => {
     const response = await apiClient.get(`/reservas/${bookingId}`);
     return {
@@ -515,7 +515,7 @@ export const bookingService = {
   obtenerReserva: async (bookingId) => {
     return bookingService.getBooking(bookingId);
   },
-  
+
   createBooking: async (bookingData) => {
     const response = await apiClient.post('/reservas', bookingData);
     return {
@@ -527,7 +527,7 @@ export const bookingService = {
   crearReserva: async (bookingData) => {
     return bookingService.createBooking(bookingData);
   },
-  
+
   updateBooking: async (bookingId, bookingData) => {
     const response = await apiClient.put(`/reservas/${bookingId}`, bookingData);
     return {
@@ -539,7 +539,7 @@ export const bookingService = {
   actualizarReserva: async (bookingId, bookingData) => {
     return bookingService.updateBooking(bookingId, bookingData);
   },
-  
+
   deleteBooking: async (bookingId) => {
     const response = await apiClient.delete(`/reservas/${bookingId}`);
     return {
@@ -551,7 +551,7 @@ export const bookingService = {
   eliminarReserva: async (bookingId) => {
     return bookingService.deleteBooking(bookingId);
   },
-  
+
   getBookingStatuses: async () => {
     // Valores fijos para los estados de reserva
     return {
@@ -563,5 +563,56 @@ export const bookingService = {
         { value: 'completada', label: 'Completada' }
       ]
     };
+  },
+
+  // Adjuntos
+  uploadAttachment: async (id, file, tipo) => {
+    const formData = new FormData();
+    formData.append('archivo', file);
+    formData.append('tipo', tipo);
+
+    // Necesitamos usar fetch directamente porque apiClient.post convierte a JSON
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_BASE_URL}/reservas/${id}/adjuntos`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      body: formData
+    });
+
+    return handleResponse(response);
+  },
+
+  getAttachments: async (id) => {
+    return apiClient.get(`/reservas/${id}/adjuntos`);
+  },
+
+  deleteAttachment: async (id, adjuntoId) => {
+    return apiClient.delete(`/reservas/${id}/adjuntos/${adjuntoId}`);
+  },
+
+  downloadAttachment: async (id, adjuntoId, nombreArchivo) => {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_BASE_URL}/reservas/${id}/adjuntos/${adjuntoId}/download`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Error al descargar el archivo');
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nombreArchivo;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
   }
 };

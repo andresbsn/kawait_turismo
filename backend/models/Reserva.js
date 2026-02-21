@@ -9,13 +9,25 @@ module.exports = (sequelize) => {
         foreignKey: 'tour_id',
         as: 'tour'
       });
-      
+
       // Relación muchos a muchos con Cliente a través de la tabla intermedia
       this.belongsToMany(models.Cliente, {
         through: 'reserva_clientes',
         foreignKey: 'reserva_id',
         otherKey: 'cliente_id',
         as: 'clientes'
+      });
+
+      // Relación con ReservaAdjunto
+      this.hasMany(models.ReservaAdjunto, {
+        foreignKey: 'reserva_id',
+        as: 'adjuntos'
+      });
+
+      // Relación con CuentaCorriente
+      this.hasMany(models.CuentaCorriente, {
+        foreignKey: 'reserva_id',
+        as: 'cuentas_corrientes'
       });
     }
   }
@@ -144,6 +156,21 @@ module.exports = (sequelize) => {
       type: DataTypes.TEXT,
       allowNull: true,
     },
+    fecha_vencimiento_hotel: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+      comment: 'Fecha de vencimiento del hotel'
+    },
+    requisitos_ingresos: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Requisitos de ingreso al destino'
+    },
+    condiciones_generales: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Condiciones generales de la reserva'
+    },
     activo: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
@@ -196,7 +223,7 @@ module.exports = (sequelize) => {
           const random = Math.floor(1000 + Math.random() * 9000);
           reserva.codigo = `RES-${year}${month}${random}`;
         }
-        
+
         // Obtener el precio del tour si no se proporciona
         if (!reserva.precio_unitario && reserva.tour_id) {
           const tour = await sequelize.models.Tour.findByPk(reserva.tour_id);

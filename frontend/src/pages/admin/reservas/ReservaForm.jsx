@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { bookingService, tourService, clienteService } from '../../../config/api';
 import dayjs from 'dayjs';
 import { ArrowLeftOutlined, SaveOutlined, UserOutlined } from '@ant-design/icons';
+import ReservaAdjuntos from './ReservaAdjuntos';
 
 const { Option } = Select;
 
@@ -27,6 +28,7 @@ const ReservaForm = () => {
   const cantidadPersonasWatch = Form.useWatch('cantidad_personas', form);
   const monedaPrecioWatch = Form.useWatch('moneda_precio_unitario', form);
   const acompanantesWatch = Form.useWatch('acompanantes', form) || [];
+  const modalidadPagoWatch = Form.useWatch('modalidad_pago', form);
 
   // Buscar clientes
   const buscarClientes = async (busqueda = '') => {
@@ -293,6 +295,10 @@ const ReservaForm = () => {
             tour_descripcion: reserva.tour_descripcion,
             fecha_inicio: reserva.fecha_inicio ? dayjs(reserva.fecha_inicio) : undefined,
             fecha_fin: reserva.fecha_fin ? dayjs(reserva.fecha_fin) : undefined,
+            // Nuevos campos
+            fecha_vencimiento_hotel: reserva.fecha_vencimiento_hotel ? dayjs(reserva.fecha_vencimiento_hotel) : undefined,
+            requisitos_ingresos: reserva.requisitos_ingresos,
+            condiciones_generales: reserva.condiciones_generales,
           });
         }
       } catch (error) {
@@ -354,7 +360,8 @@ const ReservaForm = () => {
         fecha_reserva: values.fecha_reserva.format('YYYY-MM-DD'),
         cantidad_personas: cantidadPersonas,
         clientes: clientesPayload,
-        moneda_precio_unitario: values.moneda_precio_unitario || 'ARS'
+        moneda_precio_unitario: values.moneda_precio_unitario || 'ARS',
+        modalidad_pago: values.modalidad_pago || 'cuotas'
       };
 
       if (!reservaData.tour_id) {
@@ -367,6 +374,10 @@ const ReservaForm = () => {
 
       if (reservaData.fecha_fin && dayjs.isDayjs(reservaData.fecha_fin)) {
         reservaData.fecha_fin = reservaData.fecha_fin.format('YYYY-MM-DD');
+      }
+
+      if (reservaData.fecha_vencimiento_hotel && dayjs.isDayjs(reservaData.fecha_vencimiento_hotel)) {
+        reservaData.fecha_vencimiento_hotel = reservaData.fecha_vencimiento_hotel.format('YYYY-MM-DD');
       }
 
       delete reservaData.cliente_id;
@@ -876,9 +887,22 @@ const ReservaForm = () => {
                   </Select>
                 </Form.Item>
 
-                <Form.Item label="Cantidad de cuotas" name="cantidad_cuotas" initialValue={1}>
-                  <InputNumber min={1} style={{ width: '100%' }} />
+                <Form.Item
+                  label="Modalidad de pago"
+                  name="modalidad_pago"
+                  initialValue="cuotas"
+                >
+                  <Select>
+                    <Option value="sin_cuotas">Sin cuotas (entregas libres)</Option>
+                    <Option value="cuotas">En cuotas</Option>
+                  </Select>
                 </Form.Item>
+
+                {modalidadPagoWatch !== 'sin_cuotas' && (
+                  <Form.Item label="Cantidad de cuotas" name="cantidad_cuotas" initialValue={1}>
+                    <InputNumber min={1} style={{ width: '100%' }} />
+                  </Form.Item>
+                )}
 
                 <Form.Item
                   label="Estado"
@@ -897,6 +921,27 @@ const ReservaForm = () => {
                   name="notas"
                 >
                   <Input.TextArea rows={4} placeholder="Notas adicionales sobre la reserva" />
+                </Form.Item>
+
+                <Form.Item
+                  label="Fecha Vencimiento Hotel"
+                  name="fecha_vencimiento_hotel"
+                >
+                  <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Seleccioná la fecha" />
+                </Form.Item>
+
+                <Form.Item
+                  label="Requisitos de Ingresos"
+                  name="requisitos_ingresos"
+                >
+                  <Input.TextArea rows={4} placeholder="Requisitos de ingreso al destino" />
+                </Form.Item>
+
+                <Form.Item
+                  label="Condiciones Generales"
+                  name="condiciones_generales"
+                >
+                  <Input.TextArea rows={4} placeholder="Condiciones generales de la reserva" />
                 </Form.Item>
               </Col>
             </Row>
@@ -922,6 +967,8 @@ const ReservaForm = () => {
           </Form>
         </Spin>
       </Card>
+      
+      {esEdicion && <ReservaAdjuntos reservaId={id} />}
     </div>
   );
 };

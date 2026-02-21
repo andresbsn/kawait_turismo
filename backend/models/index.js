@@ -49,7 +49,9 @@ const modelFiles = [
   'CuentaCorriente',
   'Cuota',
   'Pago',
-  'reservaCliente.model'  // Modelo para la relación muchos a muchos entre reservas y clientes
+  'ReservaAdjunto', // Modelo para adjuntos de reserva
+  'reservaCliente.model',  // Modelo para la relación muchos a muchos entre reservas y clientes
+  'Gasto'  // Modelo para gastos
 ];
 
 // Cargar cada modelo
@@ -94,7 +96,7 @@ db.syncDatabase = async (options = {}) => {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Intento ${attempt}/${maxRetries} de conexión a la base de datos...`);
-      
+
       // Por defecto, solo verificar la conexión
       if (options.force) {
         await sequelize.sync({ force: true });
@@ -110,9 +112,9 @@ db.syncDatabase = async (options = {}) => {
       return true;
     } catch (error) {
       console.error(`Error en intento ${attempt}/${maxRetries}:`, error.message);
-      
+
       if (attempt < maxRetries) {
-        console.log(`Reintentando en ${retryDelay/1000} segundos...`);
+        console.log(`Reintentando en ${retryDelay / 1000} segundos...`);
         await sleep(retryDelay);
       } else {
         console.error('Error al sincronizar la base de datos después de todos los reintentos:', error);

@@ -63,6 +63,7 @@ const cuentaCorrienteRoutes = require('./routes/cuentaCorriente.routes');
 const cuotaRoutes = require('./routes/cuota.routes');
 const pagoRoutes = require('./routes/pago.routes');
 const reportesRoutes = require('./routes/reportes.routes');
+const gastoRoutes = require('./routes/gasto.routes');
 
 // Usar rutas
 app.use('/api/auth', authRoutes);
@@ -74,6 +75,7 @@ app.use('/api/cuentas-corrientes', cuentaCorrienteRoutes);
 app.use('/api/cuotas', cuotaRoutes);
 app.use('/api/pagos', pagoRoutes);
 app.use('/api/reportes', reportesRoutes);
+app.use('/api/gastos', gastoRoutes);
 
 // Middleware de manejo de errores centralizado
 const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');

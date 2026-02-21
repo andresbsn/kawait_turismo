@@ -9,13 +9,13 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'cliente_id',
         as: 'cliente'
       });
-      
+
       // Relación con Reserva
       this.belongsTo(models.Reserva, {
         foreignKey: 'reserva_id',
         as: 'reserva'
       });
-      
+
       // Relación con Cuotas
       this.hasMany(models.Cuota, {
         foreignKey: 'cuenta_corriente_id',
@@ -91,8 +91,8 @@ module.exports = (sequelize, DataTypes) => {
           msg: 'La cantidad de cuotas debe ser un número entero'
         },
         min: {
-          args: [1],
-          msg: 'Debe haber al menos una cuota'
+          args: [0],
+          msg: 'La cantidad de cuotas no puede ser negativa'
         }
       }
     },

@@ -8,7 +8,8 @@ import {
   CalendarOutlined,
   SettingOutlined,
   LogoutOutlined,
-  UserAddOutlined
+  UserAddOutlined,
+  DollarOutlined
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
@@ -81,6 +82,9 @@ const AdminLayout = () => {
           </Menu.Item>
           <Menu.Item key="6" icon={<SettingOutlined />} onClick={() => navigate('/admin/ajustes')}>
             Ajustes
+          </Menu.Item>
+          <Menu.Item key="7" icon={<DollarOutlined />} onClick={() => navigate('/admin/gastos')}>
+            Gastos
           </Menu.Item>
           <Menu.Divider style={{ borderColor: 'rgba(255, 255, 255, 0.1)' }} />
           <Menu.Item 

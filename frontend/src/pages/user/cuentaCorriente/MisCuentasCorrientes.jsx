@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Card, Collapse, Table, Typography, Tag, Space, Button, message } from 'antd';
 import { getMisCuentasCorrientes } from '../../../services/cuentaCorrienteService';
 import { getComprobantePdf } from '../../../services/pagoService';
+import MisAdjuntosReserva from './MisAdjuntosReserva';
 
 const { Title, Text } = Typography;
 
@@ -164,12 +165,18 @@ const MisCuentasCorrientes = () => {
         key: String(cc.id),
         label: header,
         children: (
-          <Table
-            rowKey="id"
-            columns={columns}
-            dataSource={cc.cuotas || []}
-            pagination={false}
-          />
+          <>
+            <Table
+              rowKey="id"
+              columns={columns}
+              dataSource={cc.cuotas || []}
+              pagination={false}
+            />
+            {/* Adjuntos de la reserva */}
+            {reserva?.id && (
+              <MisAdjuntosReserva reservaId={reserva.id} />
+            )}
+          </>
         )
       };
     });

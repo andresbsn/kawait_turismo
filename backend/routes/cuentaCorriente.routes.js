@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const cuentaCorrienteController = require('../controllers/cuentaCorriente.controller');
+const cuotaController = require('../controllers/cuota.controller');
 const { checkAuth, checkRol } = require('../middleware/auth');
 
 // Obtener todas las cuentas corrientes
@@ -15,6 +16,17 @@ router.get('/:id', checkAuth, cuentaCorrienteController.obtenerCuentaCorriente);
 
 // Actualizar el estado de una cuenta corriente
 router.put('/:id/estado', checkAuth, checkRol(['admin']), cuentaCorrienteController.actualizarEstadoCuenta);
+
+const { uploadComprobante } = require('../middlewares/upload.middleware');
+
+// Registrar una entrega libre (sin cuota) sobre una cuenta corriente
+router.post('/:cuentaId/entrega', checkAuth, uploadComprobante.single('comprobante'), cuotaController.registrarEntrega);
+
+// Obtener pagos (entregas) de una cuenta corriente
+router.get('/:id/pagos', checkAuth, cuentaCorrienteController.obtenerPagosCuenta);
+
+// Descargar/ver comprobante de transferencia de un pago
+router.get('/pago/:pagoId/comprobante', checkAuth, cuentaCorrienteController.descargarComprobante);
 
 // Obtener cuentas corrientes por cliente
 router.get('/cliente/:clienteId', checkAuth, (req, res, next) => {
