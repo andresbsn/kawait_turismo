@@ -2,12 +2,144 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
+/* === RESET Y BASE === */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
   margin: 0;
+  padding: 0;
+  width: 100%;
+  overflow-x: hidden;
+}
+
+body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   @apply bg-gray-50;
+}
+
+/* === RESPONSIVE TABLES === */
+/* Hacer que todas las tablas de Ant Design sean scrolleables horizontalmente */
+.ant-table-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ant-table {
+  min-width: auto !important;
+}
+
+/* En mobile, las tablas pueden scrollear */
+@media (max-width: 767px) {
+  .ant-table-wrapper {
+    margin: 0 -4px;
+  }
+  
+  .ant-table-cell {
+    padding: 8px 8px !important;
+    font-size: 13px !important;
+  }
+
+  /* Reducir padding en cards */
+  .ant-card-body {
+    padding: 12px !important;
+  }
+
+  /* Modales responsivos */
+  .ant-modal {
+    max-width: calc(100vw - 16px) !important;
+    margin: 8px auto !important;
+    top: 20px !important;
+  }
+
+  .ant-modal-body {
+    max-height: calc(100vh - 200px);
+    overflow-y: auto;
+  }
+
+  /* Statisticas en columna en mobile */
+  .ant-statistic-title {
+    font-size: 12px !important;
+  }
+
+  .ant-statistic-content {
+    font-size: 18px !important;
+  }
+
+  /* Form items con menos margen */
+  .ant-form-item {
+    margin-bottom: 12px !important;
+  }
+
+  /* Tamaño de títulos */
+  .ant-typography h1,
+  .ant-typography h2,
+  .ant-typography h3 {
+    font-size: 1.1rem !important;
+  }
+}
+
+/* === RESPONSIVE CONTENT === */
+/* Evitar que contenido se desborde */
+main > div {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Contenido top-bar debe tener padding para el hamburger en mobile */
+@media (max-width: 767px) {
+  header .px-4 {
+    padding-left: 3.5rem !important;
+  }
+}
+
+/* === COLLAPSE / ACCORDION RESPONSIVE === */
+@media (max-width: 767px) {
+  .ant-collapse-header {
+    padding: 8px 12px !important;
+  }
+
+  .ant-collapse-content-box {
+    padding: 8px !important;
+  }
+}
+
+/* === BUTTONS RESPONSIVE === */
+@media (max-width: 480px) {
+  .ant-space-horizontal {
+    flex-wrap: wrap;
+    gap: 4px !important;
+  }
+  
+  .ant-btn {
+    font-size: 12px !important;
+    padding: 2px 8px !important;
+    height: auto !important;
+  }
+}
+
+/* === SCROLLBAR STYLING === */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

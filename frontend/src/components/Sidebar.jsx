@@ -12,24 +12,31 @@ import {
   MapIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  CurrencyDollarIcon
+  CurrencyDollarIcon,
+  Bars3Icon,
+  XMarkIcon
 } from '@heroicons/react/24/outline';
 import { useEffect, useState } from 'react';
 import { authService } from '../config/api';
-import logo from './assets/logo.jpeg'; // Ruta corregida para el logo
+import logo from './assets/logo.jpeg';
 
 const Sidebar = ({ collapsed, onCollapse }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Cerrar sidebar móvil al cambiar de ruta
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   // Obtener datos del usuario al cargar el componente
   useEffect(() => {
     let isMounted = true;
     
     const loadUser = async () => {
-      // Si ya estamos cargando, no hacer nada
       if (isLoading === false) return;
       
       try {
@@ -41,11 +48,9 @@ const Sidebar = ({ collapsed, onCollapse }) => {
         const response = await authService.getCurrentUser();
         console.log('Respuesta del servidor (getCurrentUser):', response);
         
-        // La respuesta tiene la estructura { success: true, user: {...} }
         if (response && response.success && response.user) {
           if (isMounted) {
             setUser(response.user);
-            // Guardar el usuario en localStorage para persistencia
             localStorage.setItem('user', JSON.stringify(response.user));
           }
         } else {
@@ -53,11 +58,9 @@ const Sidebar = ({ collapsed, onCollapse }) => {
         }
       } catch (error) {
         console.error('Error al cargar el usuario:', error);
-        // Limpiar el almacenamiento local en caso de error
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         
-        // Redirigir al login solo si no estamos ya en la página de login
         if (!window.location.pathname.includes('/login')) {
           navigate('/login', { 
             state: { from: location },
@@ -71,7 +74,6 @@ const Sidebar = ({ collapsed, onCollapse }) => {
       }
     };
 
-    // Intentar cargar el usuario desde localStorage primero
     const savedUser = localStorage.getItem('user');
     if (savedUser) {
       try {
@@ -83,10 +85,8 @@ const Sidebar = ({ collapsed, onCollapse }) => {
       }
     }
 
-    // Luego intentar actualizar desde el servidor
     loadUser();
     
-    // Limpiar al desmontar
     return () => {
       isMounted = false;
     };
@@ -95,23 +95,18 @@ const Sidebar = ({ collapsed, onCollapse }) => {
   // Manejar cierre de sesión
   const handleLogout = async () => {
     try {
-      // Limpiar el token y los datos del usuario del almacenamiento local
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       
-      // Opcional: Llamar al endpoint de logout en el servidor
       try {
         await authService.logout();
       } catch (serverError) {
         console.warn('No se pudo notificar al servidor del cierre de sesión:', serverError);
-        // Continuar con el cierre de sesión local incluso si falla la llamada al servidor
       }
       
-      // Redirigir a la página de login
       navigate('/login', { replace: true });
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
-      // Asegurarse de limpiar el almacenamiento local incluso si hay un error
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       navigate('/login', { replace: true });
@@ -132,7 +127,6 @@ const Sidebar = ({ collapsed, onCollapse }) => {
       },
     ];
 
-    // Solo el administrador puede ver usuarios
     if (user.role === 'ADMIN') {
       items.push(
         {
@@ -180,7 +174,6 @@ const Sidebar = ({ collapsed, onCollapse }) => {
       );
     }
     
-    // Elementos para GUIA
     if (user.role === 'GUIA') {
       items.push(
         {
@@ -200,7 +193,6 @@ const Sidebar = ({ collapsed, onCollapse }) => {
       );
     }
 
-    // Elemento de perfil para todos los roles
     items.push({
       name: 'Mi Perfil',
       href: '/admin/perfil',
@@ -214,17 +206,19 @@ const Sidebar = ({ collapsed, onCollapse }) => {
 
   if (isLoading) {
     return (
-      <div className="hidden md:flex md:flex-shrink-0">
-        <div className="flex flex-col w-64 h-screen bg-gradient-to-b from-gray-900 to-gray-800 border-r border-gray-700 items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+      <>
+        {/* Placeholder desktop */}
+        <div className="hidden md:flex md:flex-shrink-0">
+          <div className="flex flex-col w-64 h-screen bg-gradient-to-b from-gray-900 to-gray-800 border-r border-gray-700 items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   const navItems = getNavItems();
 
-  // Estilos para los enlaces del menú
   const menuItemClasses = (isActive) => 
     `flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors duration-200 ${
       isActive 
@@ -232,11 +226,9 @@ const Sidebar = ({ collapsed, onCollapse }) => {
         : 'text-gray-300 hover:bg-gray-700 hover:text-white'
     }`;
 
-  // Obtener la ruta actual
-  const currentPath = location.pathname;
-
-  return (
-    <div className={`h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white ${collapsed ? 'w-20' : 'w-64'} flex flex-col transition-all duration-300 ease-in-out`}>
+  // Contenido del sidebar (compartido entre mobile y desktop)
+  const sidebarContent = (
+    <>
       {/* Logo y título */}
       <div className="p-4 border-b border-gray-700 flex items-center justify-between">
         <div className="flex items-center space-x-3">
@@ -251,9 +243,10 @@ const Sidebar = ({ collapsed, onCollapse }) => {
             </h1>
           )}
         </div>
+        {/* Botón colapsar solo en desktop */}
         <button 
           onClick={onCollapse}
-          className="p-1.5 rounded-full hover:bg-gray-700 text-gray-300 hover:text-white focus:outline-none transition-colors duration-200"
+          className="hidden md:block p-1.5 rounded-full hover:bg-gray-700 text-gray-300 hover:text-white focus:outline-none transition-colors duration-200"
           aria-label={collapsed ? 'Expandir menú' : 'Contraer menú'}
         >
           {collapsed ? (
@@ -261,6 +254,14 @@ const Sidebar = ({ collapsed, onCollapse }) => {
           ) : (
             <ChevronLeftIcon className="h-5 w-5" />
           )}
+        </button>
+        {/* Botón cerrar solo en mobile */}
+        <button 
+          onClick={() => setMobileOpen(false)}
+          className="md:hidden p-1.5 rounded-full hover:bg-gray-700 text-gray-300 hover:text-white focus:outline-none transition-colors duration-200"
+          aria-label="Cerrar menú"
+        >
+          <XMarkIcon className="h-5 w-5" />
         </button>
       </div>
 
@@ -306,7 +307,6 @@ const Sidebar = ({ collapsed, onCollapse }) => {
           
           <div className="border-t border-gray-700 my-2"></div>
           
-          {/* Botón de cierre de sesión */}
           <button
             onClick={handleLogout}
             className="w-full flex items-center px-4 py-3 text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white rounded-lg transition-colors duration-200"
@@ -316,7 +316,49 @@ const Sidebar = ({ collapsed, onCollapse }) => {
           </button>
         </nav>
       </div>
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* Botón hamburguesa para mobile — visible solo en pantallas chicas */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-lg bg-gray-800 text-white shadow-lg hover:bg-gray-700 transition-colors duration-200"
+        aria-label="Abrir menú"
+      >
+        <Bars3Icon className="h-6 w-6" />
+      </button>
+
+      {/* Overlay para mobile */}
+      {mobileOpen && (
+        <div 
+          className="md:hidden fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      {/* Sidebar mobile — drawer que se desliza */}
+      <div className={`
+        md:hidden fixed inset-y-0 left-0 z-50 w-64 
+        bg-gradient-to-b from-gray-900 to-gray-800 text-white
+        flex flex-col
+        transform transition-transform duration-300 ease-in-out
+        ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        {sidebarContent}
+      </div>
+
+      {/* Sidebar desktop — siempre visible, colapsa con icono */}
+      <div className={`
+        hidden md:flex md:flex-col md:flex-shrink-0
+        h-screen bg-gradient-to-b from-gray-900 to-gray-800 text-white
+        ${collapsed ? 'w-20' : 'w-64'}
+        transition-all duration-300 ease-in-out
+      `}>
+        {sidebarContent}
+      </div>
+    </>
   );
 };
 
