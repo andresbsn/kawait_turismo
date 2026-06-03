@@ -28,7 +28,18 @@ module.exports = (sequelize) => {
             onDelete: 'CASCADE',
         },
         tipo: {
-            type: DataTypes.ENUM('presupuesto', 'voucher', 'ticket_aereo', 'asistencia_viajero', 'factura', 'liquidacion_reserva', 'otro'),
+            type: DataTypes.ENUM(
+                'presupuesto',
+                'voucher',
+                'ticket_aereo',
+                'asistencia_viajero',
+                'factura',
+                'liquidacion_reserva',
+                'otro',
+                'referencia_terrestre',
+                'referencia_aerea',
+                'referencia_asistencia'
+            ),
             allowNull: false,
         },
         nombre_archivo: {

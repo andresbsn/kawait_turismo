@@ -24,6 +24,11 @@ module.exports = (sequelize) => {
         as: 'adjuntos'
       });
 
+      this.hasMany(models.ReservaReferencia, {
+        foreignKey: 'reserva_id',
+        as: 'referencias'
+      });
+
       // Relación con CuentaCorriente
       this.hasMany(models.CuentaCorriente, {
         foreignKey: 'reserva_id',
@@ -92,6 +97,34 @@ module.exports = (sequelize) => {
       allowNull: true,
       comment: 'Código o referencia de la reserva'
     },
+    nombre_cliente: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Nombre del titular cargado manualmente'
+    },
+    apellido_cliente: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Apellido del titular cargado manualmente'
+    },
+    dni_cliente: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'DNI del titular cargado manualmente'
+    },
+    email_cliente: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      validate: {
+        isEmail: true
+      },
+      comment: 'Email del titular cargado manualmente'
+    },
+    telefono_cliente: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Teléfono del titular cargado manualmente'
+    },
     descripcion: {
       type: DataTypes.TEXT,
       allowNull: true,
@@ -131,6 +164,18 @@ module.exports = (sequelize) => {
           msg: 'Moneda no válida (ARS/USD)'
         }
       }
+    },
+    monto_abonado: {
+      type: DataTypes.DECIMAL(10, 2),
+      defaultValue: 0,
+    },
+    estado_pago: {
+      type: DataTypes.ENUM('pendiente', 'parcial', 'completo'),
+      defaultValue: 'pendiente',
+    },
+    metodo_pago: {
+      type: DataTypes.ENUM('efectivo', 'transferencia', 'tarjeta_credito', 'otro'),
+      allowNull: true,
     },
     monto_total: {
       type: DataTypes.VIRTUAL,

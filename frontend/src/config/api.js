@@ -207,8 +207,8 @@ export const authService = {
     return apiClient.post('/auth/login', { email, password, rememberMe });
   },
 
-  loginCliente: async (email, dni) => {
-    return apiClient.post('/auth/login-cliente', { email, dni });
+  loginReserva: async (codigo, dni) => {
+    return apiClient.post('/auth/login-reserva', { codigo, dni });
   },
 
   logout: async () => {
@@ -562,6 +562,22 @@ export const bookingService = {
         { value: 'cancelada', label: 'Cancelada' },
         { value: 'completada', label: 'Completada' }
       ]
+    };
+  },
+
+  registrarPagoReserva: async (bookingId, pagoData) => {
+    const response = await apiClient.post(`/pagos/reserva/${bookingId}`, pagoData);
+    return {
+      success: true,
+      ...response
+    };
+  },
+
+  obtenerResumenPagoReserva: async (bookingId) => {
+    const response = await apiClient.get(`/pagos/reserva/${bookingId}/resumen`);
+    return {
+      success: true,
+      ...response
     };
   },
 

@@ -1,8 +1,79 @@
 const BaseService = require('./BaseService');
-const { Reserva, Tour, Cliente, CuentaCorriente, Cuota } = require('../models').sequelize.models;
+const { Reserva, Tour, Cliente, CuentaCorriente, Cuota, ReservaReferencia } = require('../models').sequelize.models;
 const { Op } = require('sequelize');
 const { buildSearchCondition } = require('../utils/searchHelper');
 const { NotFoundError, ValidationError } = require('../middlewares/errorHandler');
+
+const TIPOS_REFERENCIA = ['terrestre', 'aereo', 'asistencia'];
+
+const normalizarTexto = (value) => {
+  if (value === undefined || value === null) return null;
+  const text = String(value).trim();
+  return text.length ? text : null;
+};
+
+const tieneContenidoReferencia = (ref = {}) => {
+  return Boolean(
+    normalizarTexto(ref.referencia) ||
+    normalizarTexto(ref.titular) ||
+    normalizarTexto(ref.proveedor) ||
+    normalizarTexto(ref.descripcion) ||
+    ref.fecha_vencimiento_hotel ||
+    normalizarTexto(ref.requisitos_ingresos) ||
+    normalizarTexto(ref.condiciones_generales)
+  );
+};
+
+const normalizarReferencias = (data = {}) => {
+  const { referencias } = data;
+
+  let base = [];
+
+  if (Array.isArray(referencias)) {
+    base = referencias;
+  } else if (referencias && typeof referencias === 'object') {
+    base = TIPOS_REFERENCIA
+      .filter((tipo) => referencias[tipo])
+      .map((tipo) => ({ tipo, ...referencias[tipo] }));
+  }
+
+  const legacyTerrestre = {
+    tipo: 'terrestre',
+    referencia: data.referencia,
+    titular: data.titular,
+    proveedor: data.proveedor,
+    descripcion: data.descripcion,
+    fecha_vencimiento_hotel: data.fecha_vencimiento_hotel,
+    requisitos_ingresos: data.requisitos_ingresos,
+    condiciones_generales: data.condiciones_generales,
+  };
+
+  if (tieneContenidoReferencia(legacyTerrestre) && !base.some((r) => r?.tipo === 'terrestre')) {
+    base.push(legacyTerrestre);
+  }
+
+  const normalizadas = base
+    .map((r = {}) => ({
+      tipo: TIPOS_REFERENCIA.includes(r.tipo) ? r.tipo : null,
+      referencia: normalizarTexto(r.referencia),
+      titular: normalizarTexto(r.titular),
+      proveedor: normalizarTexto(r.proveedor),
+      descripcion: normalizarTexto(r.descripcion),
+      fecha_vencimiento_hotel: r.fecha_vencimiento_hotel || null,
+      requisitos_ingresos: normalizarTexto(r.requisitos_ingresos),
+      condiciones_generales: normalizarTexto(r.condiciones_generales),
+    }))
+    .filter((r) => r.tipo && tieneContenidoReferencia(r));
+
+  const dedup = new Map();
+  normalizadas.forEach((r) => {
+    dedup.set(r.tipo, r);
+  });
+
+  return TIPOS_REFERENCIA
+    .map((tipo) => dedup.get(tipo))
+    .filter(Boolean);
+};
 
 /**
  * Función helper para calcular fechas de vencimiento de cuotas
@@ -93,6 +164,12 @@ class ReservaService extends BaseService {
           through: { attributes: [] },
           required: false
         },
+        {
+          model: CuentaCorriente,
+          as: 'cuentas_corrientes',
+          attributes: ['id', 'monto_total', 'saldo_pendiente', 'estado'],
+          required: false
+        },
         tourInclude
       ],
       order: [['fecha_reserva', 'DESC']],
@@ -128,6 +205,12 @@ class ReservaService extends BaseService {
           model: Tour,
           as: 'tour',
           attributes: ['id', 'nombre', 'destino', 'imagenUrl', 'precio'],
+          required: false
+        },
+        {
+          model: ReservaReferencia,
+          as: 'referencias',
+          attributes: ['id', 'tipo', 'referencia', 'titular', 'proveedor', 'descripcion', 'fecha_vencimiento_hotel', 'requisitos_ingresos', 'condiciones_generales'],
           required: false
         }
       ]
@@ -165,14 +248,19 @@ class ReservaService extends BaseService {
       fecha_fin,
       moneda_precio_unitario,
       modalidad_pago = 'cuotas',
+      nombre_cliente,
+      apellido_cliente,
+      dni_cliente,
+      email_cliente,
+      telefono_cliente,
       fecha_vencimiento_hotel,
       requisitos_ingresos,
       condiciones_generales
     } = data;
 
-    // Validar que se proporcione un tour_id o datos de tour personalizado
-    if (!tour_id && !(tour_nombre && tour_destino)) {
-      throw new ValidationError('Se requiere un tour existente o los datos completos de un tour personalizado');
+    // Validar que se proporcione un tour_id o, para tour personalizado, al menos el destino
+    if (!tour_id && !tour_destino) {
+      throw new ValidationError('Se requiere un tour existente o al menos el destino de un tour personalizado');
     }
 
     // Si se proporciona un tour_id, verificar que exista
@@ -183,10 +271,8 @@ class ReservaService extends BaseService {
       }
     }
 
-    // Verificar que haya al menos un cliente
-    if (!clientes || clientes.length === 0) {
-      throw new ValidationError('Se requiere al menos un cliente para la reserva');
-    }
+    const referenciasNormalizadas = normalizarReferencias(data);
+    const referenciaTerrestre = referenciasNormalizadas.find((r) => r.tipo === 'terrestre') || null;
 
     // Crear el código de reserva único
     const codigo = `RES-${Date.now()}`;
@@ -195,8 +281,8 @@ class ReservaService extends BaseService {
     const reservaData = {
       codigo,
       tour_id: tour_id || null,
-      referencia,
-      descripcion,
+      referencia: referenciaTerrestre?.referencia || referencia || null,
+      descripcion: referenciaTerrestre?.descripcion || descripcion || null,
       fecha_reserva,
       cantidad_personas,
       precio_unitario,
@@ -205,9 +291,14 @@ class ReservaService extends BaseService {
       notas,
       monto_seña,
       tipo_pago,
-      fecha_vencimiento_hotel: data.fecha_vencimiento_hotel || null,
-      requisitos_ingresos: data.requisitos_ingresos || null,
-      condiciones_generales: data.condiciones_generales || null,
+      fecha_vencimiento_hotel: referenciaTerrestre?.fecha_vencimiento_hotel || data.fecha_vencimiento_hotel || null,
+      requisitos_ingresos: referenciaTerrestre?.requisitos_ingresos || data.requisitos_ingresos || null,
+      condiciones_generales: referenciaTerrestre?.condiciones_generales || data.condiciones_generales || null,
+      nombre_cliente: normalizarTexto(nombre_cliente),
+      apellido_cliente: normalizarTexto(apellido_cliente),
+      dni_cliente: normalizarTexto(dni_cliente),
+      email_cliente: normalizarTexto(email_cliente),
+      telefono_cliente: normalizarTexto(telefono_cliente),
       ...(!tour_id && {
         tour_nombre,
         tour_destino,
@@ -219,15 +310,22 @@ class ReservaService extends BaseService {
 
     const reserva = await Reserva.create(reservaData, { transaction });
 
-    // Procesar clientes
-    const titularClienteDB = await this._procesarClientes(reserva, clientes, transaction);
-
-    if (!titularClienteDB) {
-      throw new ValidationError('No se pudo determinar el cliente titular de la reserva');
+    if (referenciasNormalizadas.length > 0) {
+      await this._guardarReferencias(reserva.id, referenciasNormalizadas, transaction);
     }
 
-    // Crear cuenta corriente + cuotas
+    // Procesar clientes (Desactivado según nuevos requerimientos)
+    /*
+    let titularClienteDB = null;
+    if (Array.isArray(clientes) && clientes.length > 0) {
+      titularClienteDB = await this._procesarClientes(reserva, clientes, transaction);
+    }
+    */
+
+    // Crear cuenta corriente + cuotas (Desactivado según nuevos requerimientos)
+    /*
     await this._crearCuentaCorriente(reserva, titularClienteDB, monto_seña, modalidad_pago === 'sin_cuotas' ? 0 : cantidad_cuotas, fecha_pago, transaction);
+    */
 
     return reserva.id;
   }
@@ -255,6 +353,11 @@ class ReservaService extends BaseService {
       fecha_inicio,
       fecha_fin,
       moneda_precio_unitario,
+      nombre_cliente,
+      apellido_cliente,
+      dni_cliente,
+      email_cliente,
+      telefono_cliente,
       fecha_vencimiento_hotel,
       requisitos_ingresos,
       condiciones_generales
@@ -265,9 +368,9 @@ class ReservaService extends BaseService {
       throw new NotFoundError('Reserva no encontrada');
     }
 
-    // Validar que se proporcione un tour_id o datos de tour personalizado
-    if (!tour_id && !(tour_nombre && tour_destino)) {
-      throw new ValidationError('Se requiere un tour existente o los datos completos de un tour personalizado');
+    // Validar que se proporcione un tour_id o, para tour personalizado, al menos el destino
+    if (!tour_id && !tour_destino) {
+      throw new ValidationError('Se requiere un tour existente o al menos el destino de un tour personalizado');
     }
 
     // Si se proporciona un tour_id, verificar que exista
@@ -278,6 +381,9 @@ class ReservaService extends BaseService {
       }
     }
 
+    const referenciasNormalizadas = normalizarReferencias(data);
+    const referenciaTerrestre = referenciasNormalizadas.find((r) => r.tipo === 'terrestre') || null;
+
     // Actualizar la reserva
     const reservaData = {
       ...(tour_id !== undefined && { tour_id }),
@@ -287,13 +393,18 @@ class ReservaService extends BaseService {
       ...(moneda_precio_unitario && { moneda_precio_unitario }),
       ...(estado && { estado }),
       ...(notas !== undefined && { notas }),
-      ...(referencia !== undefined && { referencia }),
-      ...(descripcion !== undefined && { descripcion }),
+      ...(referencia !== undefined && { referencia: referenciaTerrestre?.referencia || referencia }),
+      ...(descripcion !== undefined && { descripcion: referenciaTerrestre?.descripcion || descripcion }),
       ...(monto_seña !== undefined && { monto_seña }),
       ...(tipo_pago && { tipo_pago }),
-      ...(data.fecha_vencimiento_hotel !== undefined && { fecha_vencimiento_hotel: data.fecha_vencimiento_hotel }),
-      ...(data.requisitos_ingresos !== undefined && { requisitos_ingresos: data.requisitos_ingresos }),
-      ...(data.condiciones_generales !== undefined && { condiciones_generales: data.condiciones_generales }),
+      ...(data.fecha_vencimiento_hotel !== undefined && { fecha_vencimiento_hotel: referenciaTerrestre?.fecha_vencimiento_hotel || data.fecha_vencimiento_hotel }),
+      ...(data.requisitos_ingresos !== undefined && { requisitos_ingresos: referenciaTerrestre?.requisitos_ingresos || data.requisitos_ingresos }),
+      ...(data.condiciones_generales !== undefined && { condiciones_generales: referenciaTerrestre?.condiciones_generales || data.condiciones_generales }),
+      ...(nombre_cliente !== undefined && { nombre_cliente: normalizarTexto(nombre_cliente) }),
+      ...(apellido_cliente !== undefined && { apellido_cliente: normalizarTexto(apellido_cliente) }),
+      ...(dni_cliente !== undefined && { dni_cliente: normalizarTexto(dni_cliente) }),
+      ...(email_cliente !== undefined && { email_cliente: normalizarTexto(email_cliente) }),
+      ...(telefono_cliente !== undefined && { telefono_cliente: normalizarTexto(telefono_cliente) }),
       ...(!tour_id && {
         tour_nombre,
         tour_destino,
@@ -312,16 +423,29 @@ class ReservaService extends BaseService {
 
     await reserva.update(reservaData, { transaction });
 
-    // Actualizar clientes si se proporcionan
-    if (clientes && clientes.length > 0) {
-      await reserva.setClientes([], { transaction });
-      await this._procesarClientes(reserva, clientes, transaction);
+    if (data.referencias !== undefined || referencia !== undefined || descripcion !== undefined || fecha_vencimiento_hotel !== undefined || requisitos_ingresos !== undefined || condiciones_generales !== undefined) {
+      await ReservaReferencia.destroy({ where: { reserva_id: reserva.id }, transaction });
+      if (referenciasNormalizadas.length > 0) {
+        await this._guardarReferencias(reserva.id, referenciasNormalizadas, transaction);
+      }
     }
 
-    // Actualizar cuotas si se modifican los montos o número de cuotas
+    // Actualizar clientes si se proporcionan (Desactivado según nuevos requerimientos)
+    /*
+    if (Array.isArray(clientes)) {
+      await reserva.setClientes([], { transaction });
+      if (clientes.length > 0) {
+        await this._procesarClientes(reserva, clientes, transaction);
+      }
+    }
+    */
+
+    // Actualizar cuotas si se modifican los montos o número de cuotas (Desactivado según nuevos requerimientos)
+    /*
     if (monto_seña !== undefined || cantidad_cuotas !== undefined || precio_unitario !== undefined || cantidad_personas !== undefined) {
       await this._actualizarCuentaCorriente(reserva, monto_seña, cantidad_cuotas, transaction);
     }
+    */
 
     return reserva.id;
   }
@@ -429,7 +553,7 @@ class ReservaService extends BaseService {
     if (montoTotalCalculado && cantidad_cuotas > 0) {
       const cuentaCorriente = await CuentaCorriente.create({
         reserva_id: reserva.id,
-        cliente_id: titular.id,
+        cliente_id: titular?.id || null,
         monto_total: montoTotalCalculado,
         saldo_pendiente: Math.max(0, montoTotalCalculado - montoSenaNumber),
         cantidad_cuotas,
@@ -459,7 +583,7 @@ class ReservaService extends BaseService {
       // Modalidad "sin cuotas" - solo cuenta corriente, sin cuotas
       await CuentaCorriente.create({
         reserva_id: reserva.id,
-        cliente_id: titular.id,
+        cliente_id: titular?.id || null,
         monto_total: montoTotalCalculado,
         saldo_pendiente: Math.max(0, montoTotalCalculado - montoSenaNumber),
         cantidad_cuotas: 0,
@@ -488,13 +612,9 @@ class ReservaService extends BaseService {
       const clientesReserva = await reserva.getClientes({ transaction });
       const titular = Array.isArray(clientesReserva) && clientesReserva.length > 0 ? clientesReserva[0] : null;
 
-      if (!titular) {
-        throw new ValidationError('No se pudo determinar el cliente titular para generar la cuenta corriente');
-      }
-
       cuentaCorriente = await CuentaCorriente.create({
         reserva_id: reserva.id,
-        cliente_id: titular.id,
+        cliente_id: titular?.id || null,
         monto_total: montoTotalCalculado,
         saldo_pendiente: Math.max(0, montoTotalCalculado - montoSenaNumber),
         cantidad_cuotas: cuotasCount,
@@ -537,6 +657,24 @@ class ReservaService extends BaseService {
 
       await Cuota.bulkCreate(cuotas, { transaction });
     }
+  }
+
+  async _guardarReferencias(reservaId, referencias, transaction) {
+    const payload = referencias.map((ref) => ({
+      reserva_id: reservaId,
+      tipo: ref.tipo,
+      referencia: ref.referencia,
+      titular: ref.titular,
+      proveedor: ref.proveedor,
+      descripcion: ref.descripcion,
+      fecha_vencimiento_hotel: ref.fecha_vencimiento_hotel,
+      requisitos_ingresos: ref.requisitos_ingresos,
+      condiciones_generales: ref.condiciones_generales,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }));
+
+    await ReservaReferencia.bulkCreate(payload, { transaction });
   }
 }
 

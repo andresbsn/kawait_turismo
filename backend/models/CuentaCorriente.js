@@ -48,13 +48,13 @@ module.exports = (sequelize, DataTypes) => {
     },
     cliente_id: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: 'clientes',
         key: 'id',
       },
       onUpdate: 'CASCADE',
-      onDelete: 'RESTRICT',
+      onDelete: 'SET NULL',
     },
     monto_total: {
       type: DataTypes.DECIMAL(12, 2),

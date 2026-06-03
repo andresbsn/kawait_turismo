@@ -4,9 +4,9 @@ require('dotenv').config();
 const { Sequelize } = require('sequelize');
 
 const sequelize = new Sequelize(
-  process.env.POSTGRES_DB || process.env.PROD_DB_NAME || 'kawait_prod',
-  process.env.POSTGRES_USER || process.env.PROD_DB_USER || 'admin',
-  process.env.POSTGRES_PASSWORD || process.env.PROD_DB_PASSWORD || 'postgres_35702',
+  process.env.DB_NAME || process.env.POSTGRES_DB || process.env.PROD_DB_NAME || 'kawait_prod',
+  process.env.DB_USER || process.env.POSTGRES_USER || process.env.PROD_DB_USER || 'admin',
+  process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || process.env.PROD_DB_PASSWORD || 'postgres_35702',
   {
     host: process.env.DB_HOST || process.env.PROD_DB_HOST || 'localhost',
     port: process.env.DB_PORT || process.env.PROD_DB_PORT || 5432,
@@ -66,6 +66,36 @@ async function ejecutarMigraciones() {
     `);
     console.log('   ✅ Campo de moneda agregado\n');
 
+    // Migración 4.5: Agregar campos de pago a reservas
+    console.log('4.5. Agregando campos de pago a reservas...');
+    try {
+      await sequelize.query(`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_reservas_metodo_pago') THEN
+            CREATE TYPE enum_reservas_metodo_pago AS ENUM ('efectivo', 'transferencia', 'tarjeta_credito', 'otro');
+          END IF;
+          IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'enum_reservas_estado_pago') THEN
+            CREATE TYPE enum_reservas_estado_pago AS ENUM ('pendiente', 'parcial', 'completo');
+          END IF;
+        END
+        $$;
+      `);
+    } catch (e) {
+      console.log('   ⚠️ Enums de pago ya existían o no pudieron crearse');
+    }
+
+    await sequelize.query(`
+      ALTER TABLE reservas ADD COLUMN IF NOT EXISTS metodo_pago enum_reservas_metodo_pago;
+    `);
+    await sequelize.query(`
+      ALTER TABLE reservas ADD COLUMN IF NOT EXISTS monto_abonado DECIMAL(10, 2) DEFAULT 0;
+    `);
+    await sequelize.query(`
+      ALTER TABLE reservas ADD COLUMN IF NOT EXISTS estado_pago enum_reservas_estado_pago DEFAULT 'pendiente';
+    `);
+    console.log('   ✅ Campos de pago agregados a reservas\n');
+
     // Migración 5: Crear tabla reserva_clientes
     console.log('5. Creando tabla reserva_clientes...');
     await sequelize.query(`
@@ -79,6 +109,35 @@ async function ejecutarMigraciones() {
       );
     `);
     console.log('   ✅ Tabla reserva_clientes creada\n');
+
+    // Migración 5.5: Agregar campos titular y proveedor a reserva_referencias
+    console.log('5.5. Agregando campos titular y proveedor a reserva_referencias...');
+    await sequelize.query(`
+      ALTER TABLE reserva_referencias ADD COLUMN IF NOT EXISTS titular VARCHAR(255);
+    `);
+    await sequelize.query(`
+      ALTER TABLE reserva_referencias ADD COLUMN IF NOT EXISTS proveedor VARCHAR(255);
+    `);
+    console.log('   ✅ Campos titular y proveedor agregados a reserva_referencias\n');
+
+    // Migración 5.6: Actualizar tabla pagos para soportar reservas sin cuotas y pagos directos
+    console.log('5.6. Actualizando tabla pagos para soportar reservas sin cuotas...');
+    await sequelize.query(`
+      ALTER TABLE pagos ALTER COLUMN cuenta_corriente_id DROP NOT NULL;
+    `);
+    await sequelize.query(`
+      ALTER TABLE pagos ALTER COLUMN cliente_id DROP NOT NULL;
+    `);
+    await sequelize.query(`
+      ALTER TABLE pagos ADD COLUMN IF NOT EXISTS reserva_id INTEGER REFERENCES reservas(id) ON DELETE SET NULL ON UPDATE CASCADE;
+    `);
+    await sequelize.query(`
+      ALTER TABLE pagos ADD COLUMN IF NOT EXISTS nombre_pagador VARCHAR(255);
+    `);
+    await sequelize.query(`
+      ALTER TABLE pagos ADD COLUMN IF NOT EXISTS email_pagador VARCHAR(255);
+    `);
+    console.log('   ✅ Tabla pagos actualizada exitosamente\n');
 
     // Verificar columnas
     console.log('6. Verificando columnas de la tabla reservas...');

@@ -21,3 +21,22 @@ export const getComprobantePdf = async (pagoId, { download = false } = {}) => {
 
   return response.data;
 };
+
+export const getMisComprobantesReserva = async () => {
+  const response = await axios.get(`${API_URL}/mis-comprobantes`, {
+    headers: { ...getAuthHeaders() },
+    withCredentials: true
+  });
+
+  return response.data;
+};
+
+export const getTodosLosPagos = async (params = {}) => {
+  const response = await axios.get(`${API_URL}`, {
+    params,
+    headers: { ...getAuthHeaders() },
+    withCredentials: true
+  });
+
+  return response.data;
+};

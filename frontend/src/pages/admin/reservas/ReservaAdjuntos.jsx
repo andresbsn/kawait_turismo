@@ -6,17 +6,51 @@ import dayjs from 'dayjs';
 
 const { Option } = Select;
 
-const ReservaAdjuntos = ({ reservaId }) => {
+const TYPE_OPTIONS = [
+  { value: 'presupuesto', label: 'Presupuesto' },
+  { value: 'voucher', label: 'Vouchers' },
+  { value: 'ticket_aereo', label: 'Ticket Aéreo' },
+  { value: 'asistencia_viajero', label: 'Asistencia al Viajero' },
+  { value: 'factura', label: 'Facturas' },
+  { value: 'liquidacion_reserva', label: 'Liquidación Reserva' },
+  { value: 'otro', label: 'Otro' },
+  { value: 'referencia_terrestre', label: 'Referencia Terrestre' },
+  { value: 'referencia_aerea', label: 'Referencia Aérea' },
+  { value: 'referencia_asistencia', label: 'Referencia Asistencia' },
+];
+
+const REFERENCE_CONFIG = {
+  terrestre: {
+    attachmentType: 'referencia_terrestre',
+    title: 'Adjunto referencia terrestre',
+  },
+  aereo: {
+    attachmentType: 'referencia_aerea',
+    title: 'Adjunto referencia aérea',
+  },
+  asistencia: {
+    attachmentType: 'referencia_asistencia',
+    title: 'Adjunto referencia asistencia',
+  },
+};
+
+const ReservaAdjuntos = ({ reservaId, referenceType = null, compact = false }) => {
   const [attachments, setAttachments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [selectedType, setSelectedType] = useState(null);
+  const forcedType = REFERENCE_CONFIG[referenceType]?.attachmentType || null;
+  const [selectedType, setSelectedType] = useState(forcedType);
+
+  useEffect(() => {
+    setSelectedType(forcedType);
+  }, [forcedType]);
 
   const fetchAttachments = async () => {
     try {
       setLoading(true);
       const data = await bookingService.getAttachments(reservaId);
-      setAttachments(data || []);
+      const lista = Array.isArray(data) ? data : [];
+      setAttachments(forcedType ? lista.filter((item) => item.tipo === forcedType) : lista);
     } catch (error) {
       console.error('Error al cargar adjuntos:', error);
       message.error('No se pudieron cargar los archivos adjuntos');
@@ -34,7 +68,9 @@ const ReservaAdjuntos = ({ reservaId }) => {
   const handleUpload = async (options) => {
     const { file, onSuccess, onError } = options;
 
-    if (!selectedType) {
+    const tipoSubida = selectedType || forcedType;
+
+    if (!tipoSubida) {
       message.error('Por favor selecciona el tipo de documento antes de subirlo');
       onError('Tipo de documento no seleccionado');
       return;
@@ -42,7 +78,7 @@ const ReservaAdjuntos = ({ reservaId }) => {
 
     try {
       setUploading(true);
-      await bookingService.uploadAttachment(reservaId, file, selectedType);
+      await bookingService.uploadAttachment(reservaId, file, tipoSubida);
       message.success(`${file.name} subido correctamente`);
       onSuccess('Ok');
       fetchAttachments();
@@ -95,7 +131,10 @@ const ReservaAdjuntos = ({ reservaId }) => {
           asistencia_viajero: 'orange',
           factura: 'purple',
           liquidacion_reserva: 'red',
-          otro: 'default'
+          otro: 'default',
+          referencia_terrestre: 'geekblue',
+          referencia_aerea: 'volcano',
+          referencia_asistencia: 'gold'
         };
         const labels = {
           presupuesto: 'Presupuesto',
@@ -104,7 +143,10 @@ const ReservaAdjuntos = ({ reservaId }) => {
           asistencia_viajero: 'Asistencia al Viajero',
           factura: 'Factura',
           liquidacion_reserva: 'Liquidación Reserva',
-          otro: 'Otro'
+          otro: 'Otro',
+          referencia_terrestre: 'Referencia Terrestre',
+          referencia_aerea: 'Referencia Aérea',
+          referencia_asistencia: 'Referencia Asistencia'
         };
         return <Tag color={colors[text] || 'default'}>{labels[text] || text}</Tag>;
       }
@@ -152,34 +194,37 @@ const ReservaAdjuntos = ({ reservaId }) => {
   ];
 
   return (
-    <Card title="Documentación Adjunta" style={{ marginTop: 20 }}>
+    <Card
+      title={forcedType ? (REFERENCE_CONFIG[referenceType]?.title || 'Adjunto de referencia') : 'Documentación Adjunta'}
+      style={{ marginTop: compact ? 12 : 20 }}
+      size={compact ? 'small' : 'default'}
+    >
       <Space style={{ marginBottom: 16 }} wrap>
-        <Select
-          style={{ width: 200 }}
-          placeholder="Selecciona tipo de archivo"
-          onChange={setSelectedType}
-          value={selectedType}
-        >
-          <Option value="presupuesto">Presupuesto</Option>
-          <Option value="voucher">Vouchers</Option>
-          <Option value="ticket_aereo">Ticket Aéreo</Option>
-          <Option value="asistencia_viajero">Asistencia al Viajero</Option>
-          <Option value="factura">Facturas</Option>
-          <Option value="liquidacion_reserva">Liquidación Reserva</Option>
-          <Option value="otro">Otro</Option>
-        </Select>
+        {!forcedType && (
+          <Select
+            style={{ width: 240 }}
+            placeholder="Selecciona tipo de archivo"
+            onChange={setSelectedType}
+            value={selectedType}
+          >
+            {TYPE_OPTIONS.map((option) => (
+              <Option key={option.value} value={option.value}>{option.label}</Option>
+            ))}
+          </Select>
+        )}
 
         <Upload
             customRequest={handleUpload}
             showUploadList={false}
-            disabled={!selectedType}
+            disabled={!(selectedType || forcedType)}
         >
-            <Button icon={<UploadOutlined />} loading={uploading} disabled={!selectedType}>
-                Subir Archivo
+            <Button icon={<UploadOutlined />} loading={uploading} disabled={!(selectedType || forcedType)}>
+                {forcedType ? 'Subir/Reemplazar Archivo' : 'Subir Archivo'}
             </Button>
         </Upload>
         
-        {!selectedType && <span style={{ color: '#999', fontSize: '12px' }}>Selecciona un tipo para habilitar la subida</span>}
+        {!forcedType && !selectedType && <span style={{ color: '#999', fontSize: '12px' }}>Selecciona un tipo para habilitar la subida</span>}
+        {forcedType && <span style={{ color: '#999', fontSize: '12px' }}>Solo se permite 1 archivo por referencia (al subir uno nuevo, reemplaza el anterior).</span>}
       </Space>
 
       <Table 

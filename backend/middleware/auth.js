@@ -47,6 +47,17 @@ exports.checkAuth = async (req, res, next) => {
       };
       return next();
     }
+
+    if (decoded?.tipo === 'reserva') {
+      console.log('✅ [AUTH] Usuario tipo reserva autenticado');
+      req.usuario = {
+        role: decoded.role || 'USER',
+        tipo: 'reserva',
+        reserva_id: decoded.reserva_id,
+        codigo_reserva: decoded.codigo_reserva
+      };
+      return next();
+    }
     
     // Buscar el usuario en la base de datos
     if (!User) {

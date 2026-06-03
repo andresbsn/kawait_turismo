@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Form, Input, Button, Select, DatePicker, InputNumber, Card, message, Spin, Row, Col, AutoComplete, Tag } from 'antd';
+import { Form, Input, Button, Select, DatePicker, InputNumber, Card, message, Spin, Row, Col, AutoComplete, Tabs } from 'antd';
 import { useNavigate, useParams } from 'react-router-dom';
 import { bookingService, tourService, clienteService } from '../../../config/api';
 import dayjs from 'dayjs';
-import { ArrowLeftOutlined, SaveOutlined, UserOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
 import ReservaAdjuntos from './ReservaAdjuntos';
 
 const { Option } = Select;
+const TIPOS_REFERENCIA = ['terrestre', 'aereo', 'asistencia'];
 
 const ReservaForm = () => {
   const [form] = Form.useForm();
@@ -22,38 +23,12 @@ const ReservaForm = () => {
   const [tourSeleccionado, setTourSeleccionado] = useState(null);
   const [usaTourExistente, setUsaTourExistente] = useState(false);
   const esEdicion = Boolean(id);
-  const timeoutRef = useRef(null);
   const acompananteTimeoutRef = useRef({});
 
   const cantidadPersonasWatch = Form.useWatch('cantidad_personas', form);
   const monedaPrecioWatch = Form.useWatch('moneda_precio_unitario', form);
   const acompanantesWatch = Form.useWatch('acompanantes', form) || [];
   const modalidadPagoWatch = Form.useWatch('modalidad_pago', form);
-
-  // Buscar clientes
-  const buscarClientes = async (busqueda = '') => {
-    try {
-      setClienteBuscando(true);
-      console.log('Buscando clientes con término:', busqueda);
-      const response = await clienteService.buscarClientes({ busqueda });
-      console.log('Respuesta de búsqueda:', response);
-      
-      if (response && response.clientes) {
-        setClientes(response.clientes);
-        return response.clientes;
-      }
-      
-      setClientes([]);
-      return [];
-    } catch (error) {
-      console.error('Error al buscar clientes:', error);
-      message.error('Error al buscar clientes');
-      setClientes([]);
-      return [];
-    } finally {
-      setClienteBuscando(false);
-    }
-  };
 
   const handleBuscarAcompanante = (index, busqueda) => {
     if (acompananteTimeoutRef.current[index]) {
@@ -107,59 +82,6 @@ const ReservaForm = () => {
     });
   };
 
-  // Manejar búsqueda de clientes con debounce
-  const handleBuscarCliente = (busqueda) => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    
-    if (!busqueda || busqueda.trim().length < 2) {
-      setClientes([]);
-      return Promise.resolve([]);
-    }
-
-    setClienteBuscando(true);
-    
-    return new Promise((resolve) => {
-      timeoutRef.current = setTimeout(async () => {
-        try {
-          console.log('Buscando clientes con término:', busqueda);
-          const resultados = await buscarClientes(busqueda);
-          console.log('Resultados de búsqueda:', resultados);
-          
-          if (!Array.isArray(resultados)) {
-            console.error('La respuesta de búsqueda no es un array:', resultados);
-            resolve([]);
-            return;
-          }
-          
-          // Mapear los resultados al formato esperado por el AutoComplete
-          const opciones = resultados.map(cliente => ({
-            key: cliente.id.toString(),
-            value: `${cliente.nombre || ''} ${cliente.apellido || ''}`.trim() || 'Sin nombre',
-            label: (
-              <div>
-                <div>{`${cliente.nombre || ''} ${cliente.apellido || ''}`.trim() || 'Sin nombre'}</div>
-                {cliente.email && <div style={{ fontSize: '0.8em', color: '#666' }}>{cliente.email}</div>}
-                {cliente.telefono && <div style={{ fontSize: '0.8em', color: '#666' }}>{cliente.telefono}</div>}
-              </div>
-            ),
-            cliente: cliente
-          }));
-          
-          console.log('Opciones mapeadas:', opciones);
-          setClientes(resultados);
-          resolve(opciones);
-        } catch (error) {
-          console.error('Error en handleBuscarCliente:', error);
-          resolve([]);
-        } finally {
-          setClienteBuscando(false);
-        }
-      }, 300); // Reducido el tiempo de debounce para mejor respuesta
-    });
-  };
-
   // Manejar selección de cliente
   const handleSeleccionarCliente = (value, option) => {
     console.log('Cliente seleccionado:', option);
@@ -168,7 +90,6 @@ const ReservaForm = () => {
     
     if (cliente) {
       console.log('Datos del cliente encontrado:', cliente);
-      const nombreCompleto = `${cliente.nombre || ''} ${cliente.apellido || ''}`.trim();
       
       setClienteSeleccionado({
         id: cliente.id,
@@ -181,14 +102,18 @@ const ReservaForm = () => {
       // Actualizar los valores del formulario
       form.setFieldsValue({
         cliente_id: cliente.id,
-        nombre_cliente: nombreCompleto,
+        nombre_cliente: cliente.nombre || '',
+        apellido_cliente: cliente.apellido || '',
+        dni_cliente: cliente.dni || '',
         email_cliente: cliente.email || '',
         telefono_cliente: cliente.telefono || ''
       });
       
       console.log('Valores del formulario actualizados:', {
         cliente_id: cliente.id,
-        nombre_cliente: nombreCompleto,
+        nombre_cliente: cliente.nombre || '',
+        apellido_cliente: cliente.apellido || '',
+        dni_cliente: cliente.dni || '',
         email_cliente: cliente.email,
         telefono_cliente: cliente.telefono
       });
@@ -204,6 +129,8 @@ const ReservaForm = () => {
     form.setFieldsValue({
       cliente_id: null,
       nombre_cliente: '',
+      apellido_cliente: '',
+      dni_cliente: '',
       email_cliente: '',
       telefono_cliente: ''
     });
@@ -278,10 +205,37 @@ const ReservaForm = () => {
               dni: c.dni || ''
             }));
 
+          const referenciasByTipo = Array.isArray(reserva?.referencias)
+            ? reserva.referencias.reduce((acc, ref) => {
+                if (!ref?.tipo) return acc;
+                acc[ref.tipo] = {
+                  referencia: ref.referencia || undefined,
+                  titular: ref.titular || undefined,
+                  proveedor: ref.proveedor || undefined,
+                  descripcion: ref.descripcion || undefined,
+                  fecha_vencimiento_hotel: ref.fecha_vencimiento_hotel ? dayjs(ref.fecha_vencimiento_hotel) : undefined,
+                  requisitos_ingresos: ref.requisitos_ingresos || undefined,
+                  condiciones_generales: ref.condiciones_generales || undefined,
+                };
+                return acc;
+              }, {})
+            : {};
+
+          if (!referenciasByTipo.terrestre && (reserva.referencia || reserva.descripcion || reserva.fecha_vencimiento_hotel || reserva.requisitos_ingresos || reserva.condiciones_generales)) {
+            referenciasByTipo.terrestre = {
+              referencia: reserva.referencia || undefined,
+              titular: reserva.titular || undefined,
+              proveedor: reserva.proveedor || undefined,
+              descripcion: reserva.descripcion || undefined,
+              fecha_vencimiento_hotel: reserva.fecha_vencimiento_hotel ? dayjs(reserva.fecha_vencimiento_hotel) : undefined,
+              requisitos_ingresos: reserva.requisitos_ingresos || undefined,
+              condiciones_generales: reserva.condiciones_generales || undefined,
+            };
+          }
+
           // Establecer los valores del formulario
           form.setFieldsValue({
             tour_id: reserva.tour_id || undefined,
-            referencia: reserva.referencia,
             fecha_reserva: reserva.fecha_reserva ? dayjs(reserva.fecha_reserva) : dayjs(),
             cantidad_personas: reserva.cantidad_personas || 1,
             precio_unitario: reserva.precio_unitario,
@@ -289,16 +243,18 @@ const ReservaForm = () => {
             estado: reserva.estado,
             notas: reserva.notas,
             acompanantes,
+            referencias: referenciasByTipo,
+            nombre_cliente: reserva.nombre_cliente || titular?.nombre || '',
+            apellido_cliente: reserva.apellido_cliente || titular?.apellido || '',
+            dni_cliente: reserva.dni_cliente || titular?.dni || '',
+            email_cliente: reserva.email_cliente || titular?.email || '',
+            telefono_cliente: reserva.telefono_cliente || titular?.telefono || '',
             // Campos de tour personalizado
             tour_nombre: reserva.tour_nombre,
             tour_destino: reserva.tour_destino,
             tour_descripcion: reserva.tour_descripcion,
             fecha_inicio: reserva.fecha_inicio ? dayjs(reserva.fecha_inicio) : undefined,
             fecha_fin: reserva.fecha_fin ? dayjs(reserva.fecha_fin) : undefined,
-            // Nuevos campos
-            fecha_vencimiento_hotel: reserva.fecha_vencimiento_hotel ? dayjs(reserva.fecha_vencimiento_hotel) : undefined,
-            requisitos_ingresos: reserva.requisitos_ingresos,
-            condiciones_generales: reserva.condiciones_generales,
           });
         }
       } catch (error) {
@@ -324,13 +280,9 @@ const ReservaForm = () => {
             apellido: clienteSeleccionado.apellido,
             email: clienteSeleccionado.email,
             telefono: clienteSeleccionado.telefono,
+            dni: values.dni_cliente || undefined,
           }
-        : {
-            nombre: (values.nombre_cliente || '').trim().split(' ')[0] || (values.nombre_cliente || '').trim(),
-            apellido: (values.nombre_cliente || '').trim().split(' ').slice(1).join(' ').trim() || undefined,
-            email: values.email_cliente,
-            telefono: values.telefono_cliente,
-          };
+        : null;
 
       const acompanantesPayload = Array.isArray(values.acompanantes)
         ? values.acompanantes
@@ -346,13 +298,34 @@ const ReservaForm = () => {
             }))
         : [];
 
-      const clientesPayload = [titularPayload, ...acompanantesPayload];
+      const clientesPayload = titularPayload ? [titularPayload, ...acompanantesPayload] : acompanantesPayload;
       const cantidadPersonas = Number(values.cantidad_personas || 1);
 
-      if (clientesPayload.length !== cantidadPersonas) {
-        message.error(`La cantidad de personas (${cantidadPersonas}) debe coincidir con titular + acompañantes (${clientesPayload.length}).`);
-        return;
-      }
+      const referenciasPayload = TIPOS_REFERENCIA.reduce((acc, tipo) => {
+        const ref = values?.referencias?.[tipo] || {};
+        const referencia = (ref.referencia || '').trim();
+        const titular = (ref.titular || '').trim();
+        const proveedor = (ref.proveedor || '').trim();
+        const descripcion = (ref.descripcion || '').trim();
+        const requisitos = (ref.requisitos_ingresos || '').trim();
+        const condiciones = (ref.condiciones_generales || '').trim();
+        const fecha = ref.fecha_vencimiento_hotel;
+
+        const tieneContenido = referencia || titular || proveedor || descripcion || requisitos || condiciones || fecha;
+        if (tieneContenido) {
+          acc[tipo] = {
+            referencia: referencia || undefined,
+            titular: titular || undefined,
+            proveedor: proveedor || undefined,
+            descripcion: descripcion || undefined,
+            fecha_vencimiento_hotel: fecha && dayjs.isDayjs(fecha) ? fecha.format('YYYY-MM-DD') : undefined,
+            requisitos_ingresos: requisitos || undefined,
+            condiciones_generales: condiciones || undefined,
+          };
+        }
+
+        return acc;
+      }, {});
 
       // Preparar los datos para la API
       const reservaData = {
@@ -360,6 +333,7 @@ const ReservaForm = () => {
         fecha_reserva: values.fecha_reserva.format('YYYY-MM-DD'),
         cantidad_personas: cantidadPersonas,
         clientes: clientesPayload,
+        referencias: referenciasPayload,
         moneda_precio_unitario: values.moneda_precio_unitario || 'ARS',
         modalidad_pago: values.modalidad_pago || 'cuotas'
       };
@@ -376,14 +350,7 @@ const ReservaForm = () => {
         reservaData.fecha_fin = reservaData.fecha_fin.format('YYYY-MM-DD');
       }
 
-      if (reservaData.fecha_vencimiento_hotel && dayjs.isDayjs(reservaData.fecha_vencimiento_hotel)) {
-        reservaData.fecha_vencimiento_hotel = reservaData.fecha_vencimiento_hotel.format('YYYY-MM-DD');
-      }
-
       delete reservaData.cliente_id;
-      delete reservaData.nombre_cliente;
-      delete reservaData.email_cliente;
-      delete reservaData.telefono_cliente;
       delete reservaData.acompanantes;
 
       // Si es una edición, actualizar; si no, crear nueva
@@ -459,19 +426,12 @@ const ReservaForm = () => {
               fecha_reserva: dayjs(),
               cantidad_personas: 1,
               moneda_precio_unitario: 'ARS',
+              referencias: {},
               acompanantes: []
             }}
           >
             <Row gutter={16}>
               <Col xs={24} md={12}>
-                <Form.Item
-                  label="Referencia"
-                  name="referencia"
-                  rules={[{ pattern: /^\d*$/, message: 'La referencia debe ser numérica' }]}
-                >
-                  <Input placeholder="Número de referencia" />
-                </Form.Item>
-
                 <Form.Item
                   label="Tour"
                   name="tour_id"
@@ -504,7 +464,6 @@ const ReservaForm = () => {
                     <Form.Item
                       label="Nombre del tour"
                       name="tour_nombre"
-                      rules={[{ required: true, message: 'Por favor ingresa el nombre del tour' }]}
                     >
                       <Input placeholder="Ej: Escapada a Bariloche" />
                     </Form.Item>
@@ -651,37 +610,47 @@ const ReservaForm = () => {
                 >
                   <Input 
                     placeholder="Nombre completo del cliente" 
-                    disabled={!!clienteSeleccionado}
                     maxLength={100}
                   />
+                </Form.Item>
+
+                <Form.Item
+                  label="Apellido del Cliente"
+                  name="apellido_cliente"
+                  rules={[{
+                    required: true,
+                    message: 'El apellido del cliente es obligatorio',
+                    whitespace: true
+                  }]}
+                >
+                  <Input placeholder="Apellido del cliente" maxLength={100} />
+                </Form.Item>
+
+                <Form.Item
+                  label="DNI del Cliente"
+                  name="dni_cliente"
+                >
+                  <Input placeholder="DNI del cliente" maxLength={30} />
                 </Form.Item>
 
                 <Form.Item
                   label="Email del Cliente"
                   name="email_cliente"
                   rules={[
-                    { required: true, message: 'Por favor ingresa el email del cliente' },
                     { type: 'email', message: 'Ingresa un email válido' },
                   ]}
                 >
                   <Input 
                     type="email" 
                     placeholder="email@ejemplo.com" 
-                    readOnly={!!clienteSeleccionado}
-                    prefix={clienteSeleccionado && <UserOutlined />}
                   />
                 </Form.Item>
 
                 <Form.Item
                   label="Teléfono"
                   name="telefono_cliente"
-                  rules={[{ required: true, message: 'Por favor ingresa un número de teléfono' }]}
                 >
-                  <Input 
-                    placeholder="+569 1234 5678" 
-                    readOnly={!!clienteSeleccionado}
-                    prefix={clienteSeleccionado && <UserOutlined />}
-                  />
+                  <Input placeholder="+569 1234 5678" />
                 </Form.Item>
 
                 <div style={{ marginTop: 16, marginBottom: 8, fontWeight: 600 }}>
@@ -714,7 +683,6 @@ const ReservaForm = () => {
                                 {...restField}
                                 name={[name, 'nombre']}
                                 label="Nombre"
-                                rules={[{ required: true, message: 'Ingresa el nombre' }]}
                               >
                                 <AutoComplete
                                   style={{ width: '100%' }}
@@ -746,7 +714,6 @@ const ReservaForm = () => {
                                 {...restField}
                                 name={[name, 'apellido']}
                                 label="Apellido"
-                                rules={[{ required: true, message: 'Ingresa el apellido' }]}
                               >
                                 <Input placeholder="Apellido" />
                               </Form.Item>
@@ -778,7 +745,6 @@ const ReservaForm = () => {
                             {...restField}
                             name={[name, 'dni']}
                             label="DNI"
-                            rules={[{ required: true, message: 'Ingresa el DNI' }]}
                           >
                             <Input placeholder="DNI (opcional)" />
                           </Form.Item>
@@ -923,26 +889,60 @@ const ReservaForm = () => {
                   <Input.TextArea rows={4} placeholder="Notas adicionales sobre la reserva" />
                 </Form.Item>
 
-                <Form.Item
-                  label="Fecha Vencimiento Hotel"
-                  name="fecha_vencimiento_hotel"
-                >
-                  <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Seleccioná la fecha" />
-                </Form.Item>
+                <div style={{ marginBottom: 8, fontWeight: 600 }}>Referencias</div>
+                <Tabs
+                  items={[
+                    { key: 'terrestre', label: 'Terrestre' },
+                    { key: 'aereo', label: 'Aéreo' },
+                    { key: 'asistencia', label: 'Asistencia' },
+                  ].map((tab) => ({
+                    key: tab.key,
+                    label: tab.label,
+                    children: (
+                      <>
+                        <Form.Item label="Referencia" name={['referencias', tab.key, 'referencia']}>
+                          <Input placeholder="Número de referencia" />
+                        </Form.Item>
 
-                <Form.Item
-                  label="Requisitos de Ingresos"
-                  name="requisitos_ingresos"
-                >
-                  <Input.TextArea rows={4} placeholder="Requisitos de ingreso al destino" />
-                </Form.Item>
+                        <Form.Item label="Titular" name={['referencias', tab.key, 'titular']}>
+                          <Input placeholder="Titular de esta referencia" />
+                        </Form.Item>
 
-                <Form.Item
-                  label="Condiciones Generales"
-                  name="condiciones_generales"
-                >
-                  <Input.TextArea rows={4} placeholder="Condiciones generales de la reserva" />
-                </Form.Item>
+                        <Form.Item label="Proveedor" name={['referencias', tab.key, 'proveedor']}>
+                          <Input placeholder="Proveedor de esta referencia" />
+                        </Form.Item>
+
+                        <Form.Item label="Descripción" name={['referencias', tab.key, 'descripcion']}>
+                          <Input.TextArea rows={3} placeholder="Descripción de la referencia" />
+                        </Form.Item>
+
+                        <Form.Item label="Fecha Vencimiento Hotel" name={['referencias', tab.key, 'fecha_vencimiento_hotel']}>
+                          <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Seleccioná la fecha" />
+                        </Form.Item>
+
+                        <Form.Item label="Requisitos de Ingresos" name={['referencias', tab.key, 'requisitos_ingresos']}>
+                          <Input.TextArea rows={3} placeholder="Requisitos de ingreso al destino" />
+                        </Form.Item>
+
+                        <Form.Item label="Condiciones Generales" name={['referencias', tab.key, 'condiciones_generales']}>
+                          <Input.TextArea rows={3} placeholder="Condiciones generales de la referencia" />
+                        </Form.Item>
+
+                        {esEdicion ? (
+                          <ReservaAdjuntos
+                            reservaId={id}
+                            referenceType={tab.key}
+                            compact
+                          />
+                        ) : (
+                          <div style={{ color: '#999', fontSize: 12 }}>
+                            Guardá la reserva para poder adjuntar el archivo de esta referencia.
+                          </div>
+                        )}
+                      </>
+                    ),
+                  }))}
+                />
               </Col>
             </Row>
 

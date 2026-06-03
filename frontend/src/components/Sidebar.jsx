@@ -137,25 +137,18 @@ const Sidebar = ({ collapsed, onCollapse }) => {
           roles: ['ADMIN']
         },
         {
-          name: 'Clientes',
-          href: '/admin/clientes',
-          icon: UserIcon,
-          current: location.pathname.startsWith('/admin/clientes'),
-          roles: ['ADMIN']
-        },
-        {
-          name: 'Tours',
-          href: '/admin/tours',
-          icon: MapIcon,
-          current: location.pathname.startsWith('/admin/tours'),
-          roles: ['ADMIN']
-        },
-        {
           name: 'Reservas',
           href: '/admin/reservas',
           icon: CalendarIcon,
           current: location.pathname.startsWith('/admin/reservas'),
           roles: ['ADMIN', 'GUIA']
+        },
+        {
+          name: 'Pagos',
+          href: '/admin/pagos',
+          icon: CurrencyDollarIcon,
+          current: location.pathname.startsWith('/admin/pagos'),
+          roles: ['ADMIN']
         },
         {
           name: 'Reportes',
@@ -176,13 +169,6 @@ const Sidebar = ({ collapsed, onCollapse }) => {
     
     if (user.role === 'GUIA') {
       items.push(
-        {
-          name: 'Clientes',
-          href: '/admin/clientes',
-          icon: UserIcon,
-          current: location.pathname.startsWith('/admin/clientes'),
-          roles: ['GUIA']
-        },
         {
           name: 'Reservas',
           href: '/admin/reservas',

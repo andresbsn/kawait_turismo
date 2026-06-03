@@ -76,6 +76,18 @@ const authenticateToken = async (req, res, next) => {
       return next();
     }
 
+    if (decoded?.tipo === 'reserva') {
+      req.user = {
+        tipo: 'reserva',
+        id: decoded.reserva_id,
+        reserva_id: decoded.reserva_id,
+        codigo_reserva: decoded.codigo_reserva,
+        role: decoded.role || 'USER'
+      };
+
+      return next();
+    }
+
     // 6. Buscar el usuario en la base de datos
     console.log('Buscando usuario con ID:', decoded.id);
     const user = await User.findByPk(decoded.id, {

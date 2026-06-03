@@ -5,6 +5,25 @@ const Reserva = db.Reserva;
 const fs = require('fs');
 const path = require('path');
 
+const ALLOWED_TYPES = [
+    'presupuesto',
+    'voucher',
+    'ticket_aereo',
+    'asistencia_viajero',
+    'factura',
+    'liquidacion_reserva',
+    'otro',
+    'referencia_terrestre',
+    'referencia_aerea',
+    'referencia_asistencia'
+];
+
+const REFERENCE_ATTACHMENT_TYPES = new Set([
+    'referencia_terrestre',
+    'referencia_aerea',
+    'referencia_asistencia'
+]);
+
 const esAdmin = (req) => {
     const rol = req.usuario?.role || req.usuario?.rol || '';
     return String(rol).toUpperCase().trim() === 'ADMIN';
@@ -26,8 +45,7 @@ const uploadAttachment = async (req, res, next) => {
         }
 
         // Verificar tipo de documento
-        const allowedTypes = ['presupuesto', 'voucher', 'ticket_aereo', 'asistencia_viajero', 'factura', 'liquidacion_reserva', 'otro'];
-        if (!allowedTypes.includes(tipo)) {
+        if (!ALLOWED_TYPES.includes(tipo)) {
             if (file) {
                 fs.unlinkSync(file.path);
             }
@@ -36,6 +54,26 @@ const uploadAttachment = async (req, res, next) => {
 
         if (!file) {
             return res.status(400).json({ message: 'Archivo no proporcionado' });
+        }
+
+        if (REFERENCE_ATTACHMENT_TYPES.has(tipo)) {
+            const existingAttachment = await ReservaAdjunto.findOne({
+                where: {
+                    reserva_id: id,
+                    tipo
+                }
+            });
+
+            if (existingAttachment) {
+                const safePath = existingAttachment.ruta_archivo.replace(/^(\.\.(\/|\\|$))+/, '');
+                const absolutePath = path.join(__dirname, '../', safePath);
+
+                if (fs.existsSync(absolutePath)) {
+                    fs.unlinkSync(absolutePath);
+                }
+
+                await existingAttachment.destroy();
+            }
         }
 
         // Guardar en la base de datos

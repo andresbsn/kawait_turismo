@@ -13,6 +13,8 @@ const validarPago = [
   ]),
   check('fecha_pago', 'La fecha de pago debe ser una fecha válida').optional().isISO8601(),
   check('observaciones', 'Las observaciones deben ser texto').optional().isString(),
+  check('nombre_entrega', 'El nombre de quien entrega debe ser texto').optional({ nullable: true, checkFalsy: true }).isString(),
+  check('email_entrega', 'El email de quien entrega debe ser válido').optional({ nullable: true, checkFalsy: true }).isEmail(),
   check('cliente_id', 'El ID del cliente debe ser un número entero').optional().isInt(),
   check('cuotas_ids', 'Los IDs de las cuotas deben ser un array').optional().isArray(),
   check('cuotas_ids.*', 'Cada ID de cuota debe ser un número entero').optional().isInt(),
@@ -29,6 +31,12 @@ const validarFiltrosHistorial = [
 
 // Middleware para verificar permisos de administrador
 const esAdmin = checkRol(['ADMIN']);
+
+router.get(
+  '/',
+  [checkAuth, esAdmin],
+  pagoController.obtenerTodosLosPagos
+);
 
 /**
  * @swagger
@@ -147,6 +155,12 @@ router.get(
   '/comprobante/:pagoId', 
   [checkAuth], 
   pagoController.generarComprobantePago
+);
+
+router.get(
+  '/mis-comprobantes',
+  [checkAuth],
+  pagoController.obtenerMisComprobantesReserva
 );
 
 module.exports = router;

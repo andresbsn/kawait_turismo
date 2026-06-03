@@ -2,7 +2,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { Op } = require('sequelize');
-const { User, Cliente } = require('../models');
+const { User, Cliente, Reserva } = require('../models');
 const { validationResult } = require('express-validator');
 const JWT_SECRET = process.env.JWT_SECRET || 'tu_super_secreto_jwt_cambiar_en_produccion';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
@@ -19,6 +19,19 @@ const generateToken = (user) => {
       email: user.email,
       role: user.role,
       username: user.username
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+};
+
+const generateReservaToken = (reserva) => {
+  return jwt.sign(
+    {
+      tipo: 'reserva',
+      reserva_id: reserva.id,
+      codigo_reserva: reserva.codigo,
+      role: 'USER'
     },
     JWT_SECRET,
     { expiresIn: JWT_EXPIRES_IN }
@@ -431,6 +444,70 @@ exports.loginCliente = async (req, res) => {
   }
 };
 
+exports.loginReserva = async (req, res) => {
+  try {
+    const { codigo, dni } = req.body;
+
+    if (!codigo || !dni) {
+      return res.status(400).json({
+        success: false,
+        message: 'Se requiere código de reserva y DNI',
+        code: 'MISSING_CREDENTIALS'
+      });
+    }
+
+    if (!Reserva) {
+      return res.status(500).json({
+        success: false,
+        message: 'Modelo de reserva no disponible (Reserva)'
+      });
+    }
+
+    const codigoInput = String(codigo).trim();
+    const dniInput = String(dni).trim();
+
+    const reserva = await Reserva.findOne({
+      where: {
+        codigo: { [Op.iLike]: codigoInput },
+        dni_cliente: dniInput,
+        activo: true
+      }
+    });
+
+    if (!reserva) {
+      return res.status(401).json({
+        success: false,
+        message: 'Código de reserva o DNI incorrectos',
+        code: 'INVALID_CREDENTIALS'
+      });
+    }
+
+    const token = generateReservaToken(reserva);
+
+    return res.status(200).json({
+      success: true,
+      token,
+      expiresIn: JWT_EXPIRES_IN,
+      user: {
+        id: reserva.id,
+        username: reserva.codigo,
+        role: 'USER',
+        tipo: 'reserva',
+        reserva_id: reserva.id,
+        codigo_reserva: reserva.codigo
+      }
+    });
+  } catch (error) {
+    console.error('Error en loginReserva:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error en el servidor durante el inicio de sesión',
+      code: 'LOGIN_RESERVA_ERROR',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
 /**
  * @desc    Obtener información del usuario actual
  * @route   GET /api/auth/me
@@ -438,6 +515,30 @@ exports.loginCliente = async (req, res) => {
  */
 exports.getCurrentUser = async (req, res) => {
   try {
+    if (req.user?.tipo === 'reserva') {
+      const reserva = await Reserva.findByPk(req.user.reserva_id);
+
+      if (!reserva) {
+        return res.status(404).json({
+          success: false,
+          message: 'Reserva no encontrada',
+          code: 'RESERVA_NOT_FOUND'
+        });
+      }
+
+      return res.json({
+        success: true,
+        user: {
+          id: reserva.id,
+          username: reserva.codigo,
+          role: 'USER',
+          tipo: 'reserva',
+          reserva_id: reserva.id,
+          codigo_reserva: reserva.codigo
+        }
+      });
+    }
+
     if (req.user?.tipo === 'cliente') {
       const cliente = await Cliente.findByPk(req.user.id);
 

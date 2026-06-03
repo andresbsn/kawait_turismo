@@ -18,6 +18,11 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: 'usuario_id',
         as: 'usuario'
       });
+
+      this.belongsTo(models.Reserva, {
+        foreignKey: 'reserva_id',
+        as: 'reserva'
+      });
     }
   }
 
@@ -53,7 +58,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     cuenta_corriente_id: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: 'cuentas_corrientes',
         key: 'id'
@@ -73,13 +78,31 @@ module.exports = (sequelize, DataTypes) => {
     },
     cliente_id: {
       type: DataTypes.INTEGER,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: 'clientes',
         key: 'id'
       },
       onUpdate: 'CASCADE',
       onDelete: 'RESTRICT'
+    },
+    reserva_id: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'reservas',
+        key: 'id'
+      },
+      onUpdate: 'CASCADE',
+      onDelete: 'SET NULL'
+    },
+    nombre_pagador: {
+      type: DataTypes.STRING,
+      allowNull: true
+    },
+    email_pagador: {
+      type: DataTypes.STRING,
+      allowNull: true
     },
     usuario_id: {
       type: DataTypes.INTEGER,

@@ -50,6 +50,7 @@ const modelFiles = [
   'Cuota',
   'Pago',
   'ReservaAdjunto', // Modelo para adjuntos de reserva
+  'ReservaReferencia', // Modelo para referencias de reserva por tipo
   'reservaCliente.model',  // Modelo para la relación muchos a muchos entre reservas y clientes
   'Gasto'  // Modelo para gastos
 ];

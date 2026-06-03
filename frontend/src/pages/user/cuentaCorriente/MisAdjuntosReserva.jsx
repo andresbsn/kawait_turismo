@@ -12,7 +12,10 @@ const TIPO_LABELS = {
   ticket_aereo: { label: 'Ticket Aéreo', color: 'cyan' },
   asistencia_viajero: { label: 'Asistencia al Viajero', color: 'orange' },
   factura: { label: 'Factura', color: 'purple' },
-  otro: { label: 'Otro', color: 'default' }
+  otro: { label: 'Otro', color: 'default' },
+  referencia_terrestre: { label: 'Referencia Terrestre', color: 'geekblue' },
+  referencia_aerea: { label: 'Referencia Aérea', color: 'volcano' },
+  referencia_asistencia: { label: 'Referencia Asistencia', color: 'gold' }
 };
 
 const getIcon = (mimeType) => {

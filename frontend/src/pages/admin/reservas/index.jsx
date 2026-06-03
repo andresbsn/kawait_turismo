@@ -5,7 +5,6 @@ import {
   Tag, 
   Space, 
   Button, 
-  Badge, 
   Input, 
   Select, 
   DatePicker, 
@@ -13,7 +12,10 @@ import {
   Spin,
   Popconfirm,
   Tooltip,
-  Empty
+  Empty,
+  Modal,
+  Form,
+  InputNumber
 } from 'antd';
 import { 
   CalendarOutlined, 
@@ -31,6 +33,15 @@ import { bookingService } from '../../../config/api';
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 
+const METODOS_PAGO = [
+  { value: 'efectivo', label: 'Efectivo' },
+  { value: 'transferencia', label: 'Transferencia' },
+  { value: 'tarjeta_credito', label: 'Tarjeta Crédito' },
+  { value: 'tarjeta_debito', label: 'Tarjeta Débito' },
+  { value: 'deposito', label: 'Depósito' },
+  { value: 'otro', label: 'Otro' },
+];
+
 const Reservas = () => {
   const [reservas, setReservas] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -44,47 +55,70 @@ const Reservas = () => {
     search: '',
     fecha: null,
   });
+  const [pagoModalVisible, setPagoModalVisible] = useState(false);
+  const [reservaPagoSeleccionada, setReservaPagoSeleccionada] = useState(null);
+  const [savingPago, setSavingPago] = useState(false);
+  const [pagoForm] = Form.useForm();
   const navigate = useNavigate();
 
   // Cargar reservas
   const fetchReservas = async (params = {}) => {
     try {
       setLoading(true);
-      
-      const { current = 1, pageSize = 10 } = pagination;
+
+      const { current = 1, pageSize = 10 } = params;
       const { estado, search, fecha } = filters;
-      
-      // Construir parámetros de consulta
+
       const queryParams = {
         page: current,
         limit: pageSize,
         ...(estado && { estado }),
         ...(search && { search }),
-        ...(fecha && fecha[0] && fecha[1] && { 
+        ...(fecha && fecha[0] && fecha[1] && {
           fechaInicio: fecha[0].format('YYYY-MM-DD'),
           fechaFin: fecha[1].format('YYYY-MM-DD')
         })
       };
-      
+
       try {
         const response = await bookingService.getBookings(queryParams);
-        
+
         if (response && response.success) {
-          // Mapear los datos para que coincidan con lo que espera la tabla
           const reservasMapeadas = (response.reservas || []).map(reserva => {
-            const titular = Array.isArray(reserva.clientes) ? reserva.clientes[0] : null;
+            const titular = Array.isArray(reserva.clientes) && reserva.clientes.length > 0 ? reserva.clientes[0] : null;
             const tourNombre = reserva.tour?.nombre || reserva.tour_nombre || 'Sin tour';
             const tourDestino = reserva.tour?.destino || reserva.tour_destino || '';
+            const cuentas = Array.isArray(reserva.cuentas_corrientes) ? reserva.cuentas_corrientes : [];
+            
+            const montoTotalCuenta = cuentas.reduce((sum, cuenta) => sum + Number(cuenta?.monto_total || 0), 0);
+            const saldoPendienteCuenta = cuentas.reduce((sum, cuenta) => sum + Number(cuenta?.saldo_pendiente || 0), 0);
+            const montoTotalCalculadoVuelo = Number(reserva.cantidad_personas || 0) * Number(reserva.precio_unitario || 0);
+            
+            const montoTotalFinal = montoTotalCuenta > 0 ? montoTotalCuenta : montoTotalCalculadoVuelo;
+            const montoAbonadoFinal = cuentas.length > 0 
+              ? Math.max(0, montoTotalFinal - saldoPendienteCuenta)
+              : Number(reserva.monto_abonado || 0);
+            const saldoPendienteFinal = cuentas.length > 0 
+              ? saldoPendienteCuenta 
+              : Math.max(0, montoTotalFinal - montoAbonadoFinal);
+
+            const nombreClienteManual = (reserva.nombre_cliente || reserva.apellido_cliente)
+              ? `${reserva.nombre_cliente || ''} ${reserva.apellido_cliente || ''}`.trim()
+              : null;
 
             return {
               ...reserva,
-              nombreCliente: titular ? `${titular.nombre || ''} ${titular.apellido || ''}`.trim() : 'Sin cliente',
-              emailCliente: titular?.email || 'Sin email',
-              telefonoCliente: titular?.telefono || 'Sin teléfono',
+              nombreCliente: titular 
+                ? `${titular.nombre || ''} ${titular.apellido || ''}`.trim() 
+                : (nombreClienteManual || 'Sin titular'),
+              emailCliente: titular?.email || reserva.email_cliente || 'Sin email',
+              telefonoCliente: titular?.telefono || reserva.telefono_cliente || 'Sin teléfono',
               fechaReserva: reserva.fecha_reserva || new Date().toISOString(),
               cantidadPersonas: reserva.cantidad_personas || 1,
               precioUnitario: reserva.precio_unitario || 0,
-              montoTotal: reserva.monto_total || 0,
+              montoTotal: montoTotalFinal,
+              saldoPendiente: saldoPendienteFinal,
+              montoAbonado: montoAbonadoFinal,
               tour: {
                 ...(reserva.tour || {}),
                 nombre: tourNombre,
@@ -93,21 +127,20 @@ const Reservas = () => {
               key: reserva.id || Math.random().toString(36).substr(2, 9)
             };
           });
-          
+
           setReservas(reservasMapeadas);
-          setPagination({
-            ...pagination,
+          setPagination((prev) => ({
+            ...prev,
             current: response.page || current,
             pageSize: response.limit || pageSize,
             total: response.total || 0,
-          });
+          }));
         } else {
           message.error(response?.message || 'Error al cargar las reservas');
           setReservas([]);
         }
       } catch (apiError) {
         console.error('Error en la petición de reservas:', apiError);
-        // No mostrar mensaje de error si es un error de autenticación (se maneja en el interceptor)
         if (apiError.status !== 401) {
           message.error(apiError.message || 'Error al cargar las reservas');
         }
@@ -121,9 +154,77 @@ const Reservas = () => {
     }
   };
 
+  const abrirModalPago = (reserva) => {
+    const saldoPendiente = Number(reserva?.saldoPendiente || 0);
+    setReservaPagoSeleccionada(reserva);
+    setPagoModalVisible(true);
+    pagoForm.setFieldsValue({
+      monto: saldoPendiente > 0 ? saldoPendiente : undefined,
+      metodo_pago: 'transferencia',
+      nombre_entrega: '',
+      email_entrega: ''
+    });
+  };
+
+  const cerrarModalPago = () => {
+    setPagoModalVisible(false);
+    setReservaPagoSeleccionada(null);
+    pagoForm.resetFields();
+  };
+
+  const confirmarPago = async () => {
+    if (!reservaPagoSeleccionada) return;
+
+    try {
+      const values = await pagoForm.validateFields();
+      const saldoPendiente = Number(reservaPagoSeleccionada.saldoPendiente || 0);
+      const monto = Number(values.monto || 0);
+
+      if (monto <= 0) {
+        message.error('El importe debe ser mayor a 0');
+        return;
+      }
+
+      if (saldoPendiente > 0 && monto > saldoPendiente) {
+        message.error('El importe no puede superar el saldo adeudado');
+        return;
+      }
+
+      setSavingPago(true);
+
+      const observaciones = [
+        values.nombre_entrega ? `Entrega por: ${values.nombre_entrega}` : null,
+        values.email_entrega ? `Email: ${values.email_entrega}` : null,
+      ].filter(Boolean).join(' | ');
+
+      await bookingService.registrarPagoReserva(reservaPagoSeleccionada.id, {
+        monto,
+        metodo_pago: values.metodo_pago,
+        nombre_entrega: values.nombre_entrega,
+        email_entrega: values.email_entrega,
+        observaciones,
+      });
+
+      message.success('Pago generado y asociado a la reserva');
+      cerrarModalPago();
+      fetchReservas({
+        current: pagination.current,
+        pageSize: pagination.pageSize,
+      });
+    } catch (error) {
+      if (error?.errorFields) return;
+      message.error(error?.message || 'No se pudo generar el pago');
+    } finally {
+      setSavingPago(false);
+    }
+  };
+
   // Cargar datos al montar el componente
   useEffect(() => {
-    fetchReservas();
+    fetchReservas({
+      current: pagination.current,
+      pageSize: pagination.pageSize,
+    });
   }, [filters, pagination.current, pagination.pageSize]);
 
   // Manejar cambio de página o tamaño de página
@@ -241,7 +342,17 @@ const Reservas = () => {
       title: 'Monto Total',
       dataIndex: 'montoTotal',
       key: 'monto',
-      render: (monto) => `$${parseFloat(monto || 0).toLocaleString('es-CL')}`,
+      render: (_, record) => {
+        const total = Number(record?.montoTotal || 0);
+        const adeudado = Number(record?.saldoPendiente || 0);
+        const moneda = record?.moneda_precio_unitario === 'USD' ? 'USD' : 'ARS';
+        return (
+          <div>
+            <div>{`${moneda} ${total.toLocaleString('es-CL')}`}</div>
+            <div className="text-xs text-gray-500">{`Adeuda: ${moneda} ${adeudado.toLocaleString('es-CL')}`}</div>
+          </div>
+        );
+      },
     },
     {
       title: 'Acciones',
@@ -259,6 +370,15 @@ const Reservas = () => {
               icon={<EditOutlined />} 
               onClick={() => navigate(`/admin/reservas/editar/${record.id}`)}
             />
+          </Tooltip>
+          <Tooltip title="Generar pago">
+            <Button
+              type="primary"
+              onClick={() => abrirModalPago(record)}
+              disabled={Number(record?.saldoPendiente || 0) <= 0}
+            >
+              Generar pago
+            </Button>
           </Tooltip>
           <Popconfirm
             title="¿Está seguro de eliminar esta reserva?"
@@ -373,6 +493,64 @@ const Reservas = () => {
           />
         </Spin>
       </Card>
+
+      <Modal
+        title="Generar pago"
+        open={pagoModalVisible}
+        onCancel={cerrarModalPago}
+        onOk={confirmarPago}
+        okText="Confirmar pago"
+        cancelText="Cancelar"
+        confirmLoading={savingPago}
+      >
+        <Form layout="vertical" form={pagoForm}>
+          <Form.Item>
+            <div style={{ color: '#666' }}>
+              {`Saldo adeudado: $${Number(reservaPagoSeleccionada?.saldoPendiente || 0).toLocaleString('es-CL')}`}
+            </div>
+          </Form.Item>
+
+          <Form.Item
+            label="Importe a entregar"
+            name="monto"
+            rules={[{ required: true, message: 'Ingresá el importe' }]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              min={0.01}
+              max={Number(reservaPagoSeleccionada?.saldoPendiente || 0) || undefined}
+              step={1000}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="Método de pago"
+            name="metodo_pago"
+            rules={[{ required: true, message: 'Seleccioná el método de pago' }]}
+          >
+            <Select options={METODOS_PAGO} />
+          </Form.Item>
+
+          <Form.Item
+            label="Nombre de quien entrega"
+            name="nombre_entrega"
+            rules={[{ required: true, message: 'Ingresá el nombre' }]}
+          >
+            <Input placeholder="Nombre y apellido" />
+          </Form.Item>
+
+          <Form.Item
+            label="Email"
+            name="email_entrega"
+            rules={[
+              { required: true, message: 'Ingresá el email' },
+              { type: 'email', message: 'Ingresá un email válido' }
+            ]}
+          >
+            <Input placeholder="email@dominio.com" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

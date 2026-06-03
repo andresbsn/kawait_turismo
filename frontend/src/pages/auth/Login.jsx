@@ -12,7 +12,7 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [errors, setErrors] = useState({});
-  const [isClienteLogin, setIsClienteLogin] = useState(false);
+  const [isReservaLogin, setIsReservaLogin] = useState(false);
   
   // Configurar interceptores al montar el componente
   useEffect(() => {
@@ -58,8 +58,8 @@ const Login = () => {
 
       // Llamar al servicio de autenticación
       const rememberMe = values.remember || false;
-      const response = isClienteLogin
-        ? await authService.loginCliente(values.username, values.password)
+      const response = isReservaLogin
+        ? await authService.loginReserva(values.username, values.password)
         : await authService.login(values.username, values.password, rememberMe);
 
       console.log('Respuesta del servidor:', response);
@@ -97,8 +97,8 @@ const Login = () => {
         'Error al iniciar sesión. Verifica tus credenciales e intenta nuevamente.';
 
       if (status === 401) {
-        const msg = isClienteLogin
-          ? 'Email o DNI incorrectos. Verificá los datos e intentá nuevamente.'
+        const msg = isReservaLogin
+          ? 'Código de reserva o DNI incorrectos. Verificá los datos e intentá nuevamente.'
           : 'Usuario o contraseña incorrectos. Verificá los datos e intentá nuevamente.';
         setErrors({ form: msg });
         message.error(msg);
@@ -173,13 +173,13 @@ const Login = () => {
               name="username"
               rules={[{
                 required: true,
-                message: isClienteLogin ? 'Por favor ingresa tu email' : 'Por favor ingresa tu nombre de usuario',
+                message: isReservaLogin ? 'Por favor ingresa tu código de reserva' : 'Por favor ingresa tu nombre de usuario',
               }]}
               className="mb-4"
             >
               <Input 
                 prefix={<UserOutlined className="text-gray-400" />} 
-                placeholder={isClienteLogin ? 'Email' : 'Nombre de usuario'} 
+                placeholder={isReservaLogin ? 'Código de reserva' : 'Nombre de usuario'} 
                 size="large"
                 className="rounded-xl border-gray-300 hover:border-primary-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all duration-200"
               />
@@ -189,13 +189,13 @@ const Login = () => {
               name="password"
               rules={[{
                 required: true,
-                message: isClienteLogin ? 'Por favor ingresa tu DNI' : 'Por favor ingresa tu contraseña',
+                message: isReservaLogin ? 'Por favor ingresa tu DNI' : 'Por favor ingresa tu contraseña',
               }]}
               className="mb-1"
             >
               <Input.Password 
                 prefix={<LockOutlined className="text-gray-400" />} 
-                placeholder={isClienteLogin ? 'DNI' : 'Contraseña'} 
+                placeholder={isReservaLogin ? 'DNI' : 'Contraseña'} 
                 size="large"
                 className="rounded-xl border-gray-300 hover:border-primary-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 transition-all duration-200"
               />
@@ -204,15 +204,15 @@ const Login = () => {
 
           <div className="flex items-center justify-between mb-6">
             <Checkbox
-              checked={isClienteLogin}
-              onChange={(e) => setIsClienteLogin(e.target.checked)}
+              checked={isReservaLogin}
+              onChange={(e) => setIsReservaLogin(e.target.checked)}
               className="text-gray-600 hover:text-primary-600 transition-colors duration-200"
             >
-              Soy cliente
+              Soy pasajero con reserva
             </Checkbox>
 
             <Form.Item name="remember" valuePropName="checked" noStyle>
-              <Checkbox className="text-gray-600 hover:text-primary-600 transition-colors duration-200" disabled={isClienteLogin}>
+              <Checkbox className="text-gray-600 hover:text-primary-600 transition-colors duration-200" disabled={isReservaLogin}>
                 Recordarme
               </Checkbox>
             </Form.Item>

@@ -19,6 +19,7 @@ router.post('/register', authController.register);
 router.post('/login', authController.login);
 
 router.post('/login-cliente', authController.loginCliente);
+router.post('/login-reserva', authController.loginReserva);
 
 /**
  * @route   GET /api/auth/me

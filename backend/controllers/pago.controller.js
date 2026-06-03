@@ -5,9 +5,28 @@ const asyncHandler = require('../utils/asyncHandler');
 const { success } = require('../utils/responseHandler');
 const { withTransaction } = require('../utils/transactionWrapper');
 const { NotFoundError, ValidationError } = require('../middlewares/errorHandler');
+const emailService = require('../services/email.service');
 
 // Tipos de pago permitidos
 const METODOS_PAGO = ['efectivo', 'transferencia', 'tarjeta_credito', 'tarjeta_debito', 'deposito', 'otro'];
+
+const fs = require('fs');
+const path = require('path');
+
+const getLogoDataUri = () => {
+  try {
+    const logoPath = path.resolve(__dirname, '../assets/logo.jpeg');
+    if (!fs.existsSync(logoPath)) return null;
+    const buf = fs.readFileSync(logoPath);
+    return `data:image/jpeg;base64,${buf.toString('base64')}`;
+  } catch (e) {
+    return null;
+  }
+};
+
+const buildNumeroComprobante = (correlativo) => {
+  return `REC-${String(correlativo).padStart(6, '0')}`;
+};
 
 /**
  * Registra un pago para una reserva y actualiza las cuentas corrientes de los clientes
@@ -19,6 +38,8 @@ exports.registrarPagoReserva = asyncHandler(async (req, res) => {
     metodo_pago,
     fecha_pago = new Date(),
     observaciones = '',
+    nombre_entrega,
+    email_entrega,
     cliente_id,
     cuotas_ids = []
   } = req.body;
@@ -29,128 +50,115 @@ exports.registrarPagoReserva = asyncHandler(async (req, res) => {
   }
 
   const resultado = await withTransaction(async (transaction) => {
-    // 1. Obtener la reserva con sus cuentas corrientes y clientes
-    const reserva = await Reserva.findByPk(reservaId, {
-      include: [
-        {
-          model: CuentaCorriente,
-          as: 'cuentas_corrientes',
-          include: [
-            {
-              model: Cuota,
-              as: 'cuotas',
-              where: {
-                estado: { [Op.ne]: 'pagado' }
-              },
-              required: false
-            },
-            {
-              model: Cliente,
-              as: 'cliente',
-              attributes: ['id', 'nombre', 'apellido']
-            }
-          ]
-        }
-      ],
-      transaction
-    });
+    // 1. Obtener la reserva directamente
+    const reserva = await Reserva.findByPk(reservaId, { transaction });
 
     if (!reserva) {
       throw new NotFoundError('Reserva no encontrada');
     }
 
-    // 2. Verificar que la reserva tenga cuentas corrientes
-    if (!reserva.cuentas_corrientes || reserva.cuentas_corrientes.length === 0) {
-      throw new ValidationError('La reserva no tiene cuentas corrientes asociadas');
+    const montoTotalCalculado = Number(reserva.cantidad_personas || 1) * Number(reserva.precio_unitario || 0);
+    const montoRestanteTotal = Math.max(0, montoTotalCalculado - Number(reserva.monto_abonado || 0));
+    const montoAPagar = Math.min(parseFloat(monto), montoRestanteTotal);
+
+    if (montoAPagar <= 0) {
+      throw new ValidationError('Esta reserva ya está pagada por completo o el monto es inválido');
     }
 
-    // 3. Aplicar el pago a las cuentas corrientes
-    const resultadosPago = [];
-    let montoRestante = parseFloat(monto);
+    // Obtener correlativo de pago máximo para autoincrementar correlativo
+    const maxCorrelativo = await db.sequelize.models.Pago.max('correlativo', { transaction }) || 0;
+    const correlativo = maxCorrelativo + 1;
 
-    // Si se especificó un cliente, aplicar el pago solo a sus cuentas
-    const cuentasAAplicar = cliente_id
-      ? reserva.cuentas_corrientes.filter(cc => cc.cliente_id === parseInt(cliente_id))
-      : reserva.cuentas_corrientes;
-
-    if (cuentasAAplicar.length === 0) {
-      throw new ValidationError('No se encontraron cuentas corrientes para el cliente especificado');
-    }
-
-    // Aplicar el pago a cada cuenta
-    for (const cuenta of cuentasAAplicar) {
-      if (montoRestante <= 0) break;
-
-      // Si hay cuotas específicas, filtrar solo las de esta cuenta
-      const cuotasPendientes = cuotas_ids.length > 0
-        ? cuenta.cuotas.filter(c => cuotas_ids.includes(c.id))
-        : cuenta.cuotas;
-
-      // Ordenar por fecha de vencimiento (las más antiguas primero)
-      cuotasPendientes.sort((a, b) => new Date(a.fecha_vencimiento) - new Date(b.fecha_vencimiento));
-
-      // Aplicar el pago a las cuotas
-      for (const cuota of cuotasPendientes) {
-        if (montoRestante <= 0) break;
-
-        const montoAPagar = Math.min(montoRestante, cuota.monto - (cuota.monto_abonado || 0));
-
-        if (montoAPagar > 0) {
-          const nuevoMontoAbonado = (cuota.monto_abonado || 0) + montoAPagar;
-          const estaPagada = nuevoMontoAbonado >= cuota.monto;
-
-          await cuota.update({
-            monto_abonado: nuevoMontoAbonado,
-            estado: estaPagada ? 'pagado' : 'parcial',
-            fecha_pago: estaPagada ? new Date() : null,
-            metodo_pago: metodo_pago,
-            observaciones: observaciones
-          }, { transaction });
-
-          montoRestante -= montoAPagar;
-
-          resultadosPago.push({
-            cuenta_corriente_id: cuenta.id,
-            cliente_id: cuenta.cliente_id,
-            cuota_id: cuota.id,
-            monto_aplicado: montoAPagar,
-            saldo_anterior: cuota.monto - (cuota.monto_abonado || 0),
-            saldo_actual: cuota.monto - nuevoMontoAbonado
-          });
-        }
-      }
-
-      // Actualizar el saldo de la cuenta corriente
-      const montoAplicadoACuenta = resultadosPago
-        .filter(r => r.cuenta_corriente_id === cuenta.id)
-        .reduce((sum, r) => sum + r.monto_aplicado, 0);
-
-      const nuevoSaldoCuenta = cuenta.saldo_pendiente - montoAplicadoACuenta;
-
-      await cuenta.update({
-        monto_abonado: (cuenta.monto_abonado || 0) + montoAplicadoACuenta,
-        saldo_pendiente: nuevoSaldoCuenta,
-        estado: nuevoSaldoCuenta <= 0 ? 'pagado' : 'pendiente',
-        fecha_ultimo_pago: new Date()
-      }, { transaction });
-    }
-
-    // 4. Actualizar el estado general de la reserva
-    const montoTotalAbonado = reserva.cuentas_corrientes.reduce(
-      (sum, cc) => sum + (cc.monto_abonado || 0), 0
-    );
-
-    const estaPagadaCompleto = reserva.cuentas_corrientes.every(
-      cc => cc.estado === 'pagado'
-    );
-
-    await reserva.update({
-      monto_abonado: montoTotalAbonado,
-      estado_pago: estaPagadaCompleto ? 'completo' : 'parcial',
-      fecha_ultimo_pago: new Date()
+    // Crear el registro de Pago (asociado directamente a reserva_id)
+    const pago = await db.sequelize.models.Pago.create({
+      correlativo,
+      numero_comprobante: buildNumeroComprobante(correlativo),
+      reserva_id: reserva.id,
+      cuenta_corriente_id: null,
+      cuota_id: null,
+      cliente_id: null,
+      usuario_id: req.usuario?.id || null,
+      monto: montoAPagar,
+      metodo_pago,
+      fecha_pago: new Date(fecha_pago),
+      observaciones: observaciones || null,
+      nombre_pagador: nombre_entrega || null,
+      email_pagador: email_entrega || null,
+      fecha_creacion: new Date()
     }, { transaction });
 
-    return { resultadosPago, montoRestante, reservaId };
+    // Actualizar el monto_abonado y el estado_pago de la reserva
+    const nuevoMontoAbonado = Number(reserva.monto_abonado || 0) + montoAPagar;
+    let estadoPagoReserva = 'pendiente';
+    if (nuevoMontoAbonado >= montoTotalCalculado) {
+      estadoPagoReserva = 'completo';
+    } else if (nuevoMontoAbonado > 0) {
+      estadoPagoReserva = 'parcial';
+    }
+
+    await reserva.update({
+      monto_abonado: nuevoMontoAbonado,
+      estado_pago: estadoPagoReserva,
+      metodo_pago: metodo_pago
+    }, { transaction });
+
+    const resultadosPago = [{
+      reserva_id: reserva.id,
+      pago_id: pago.id,
+      monto_aplicado: montoAPagar,
+      saldo_anterior: montoRestanteTotal,
+      saldo_actual: Math.max(0, montoRestanteTotal - montoAPagar)
+    }];
+
+    // Generar PDF del comprobante para adjuntarlo al correo
+    let pdfBuffer = null;
+    try {
+      const { createPdfFromHtml } = require('../helpers/pdfGenerator');
+      const logoUri = getLogoDataUri();
+      
+      const pdfData = {
+        comprobante: {
+          numero: pago.numero_comprobante,
+          fecha_emision: new Date(pago.fecha_pago).toLocaleDateString('es-AR'),
+          estado: 'PAGADO',
+          metodo_pago: String(pago.metodo_pago || '').toUpperCase(),
+          monto: pago.monto,
+          moneda: reserva.moneda_precio_unitario || 'ARS',
+          referencia: reserva.referencia || 'N/A',
+          observaciones: pago.observaciones || 'Sin observaciones'
+        },
+        cliente: {
+          nombre: `${reserva.nombre_cliente || ''} ${reserva.apellido_cliente || ''}`.trim() || nombre_entrega || 'No especificado',
+          documento: reserva.dni_cliente || 'No especificado',
+          email: email_entrega || reserva.email_cliente || 'No especificado',
+          telefono: reserva.telefono_cliente || 'No especificado'
+        },
+        reserva: {
+          referencia: reserva.referencia || 'N/A',
+          fecha_reserva: reserva.fecha_reserva
+            ? new Date(reserva.fecha_reserva).toLocaleDateString('es-AR')
+            : 'No especificada',
+          monto_total: montoTotalCalculado,
+          moneda: reserva.moneda_precio_unitario || 'ARS'
+        },
+        cuotas: [],
+        cheque: null,
+        empresa: {
+          nombre: 'KAWAI TURISMO',
+          direccion: 'Belgrano 990, Villa Ramallo, Buenos Aires',
+          telefono: '3407415397',
+          email: '',
+          cuit: '',
+          logo: logoUri
+        }
+      };
+
+      pdfBuffer = await createPdfFromHtml('comprobante', pdfData);
+    } catch (pdfErr) {
+      console.error('Error al generar el comprobante PDF para el correo:', pdfErr);
+    }
+
+    return { resultadosPago, montoRestante: parseFloat(monto) - montoAPagar, reservaId, pdfBuffer, pago };
   });
 
   // 5. Obtener la reserva actualizada con toda su información
@@ -159,21 +167,60 @@ exports.registrarPagoReserva = asyncHandler(async (req, res) => {
       {
         model: CuentaCorriente,
         as: 'cuentas_corrientes',
+        required: false,
         include: [
           {
             model: Cuota,
             as: 'cuotas',
-            order: [['numero_cuota', 'ASC']]
+            required: false
           },
           {
             model: Cliente,
             as: 'cliente',
+            required: false,
             attributes: ['id', 'nombre', 'apellido']
           }
         ]
       }
     ]
   });
+
+  if (email_entrega) {
+    try {
+      const montoFormateado = Number(monto || 0).toLocaleString('es-AR');
+      const fechaFormateada = new Date(fecha_pago).toLocaleString('es-AR');
+      const codigoReserva = reservaActualizada?.codigo || `#${resultado.reservaId}`;
+
+      await emailService.sendEmail({
+        to: email_entrega,
+        subject: `Confirmación de pago - Reserva ${codigoReserva}`,
+        text: [
+          'Tu pago fue registrado correctamente.',
+          `Reserva: ${codigoReserva}`,
+          `Importe: ${montoFormateado}`,
+          `Método: ${metodo_pago}`,
+          `Fecha: ${fechaFormateada}`,
+          nombre_entrega ? `Registrado por: ${nombre_entrega}` : null,
+        ].filter(Boolean).join('\n'),
+        html: `
+          <p>Tu pago fue registrado correctamente y se adjunta el comprobante correspondiente.</p>
+          <p><strong>Reserva:</strong> ${codigoReserva}</p>
+          <p><strong>Importe:</strong> ${montoFormateado}</p>
+          <p><strong>Método:</strong> ${metodo_pago}</p>
+          <p><strong>Fecha:</strong> ${fechaFormateada}</p>
+          ${nombre_entrega ? `<p><strong>Registrado por:</strong> ${nombre_entrega}</p>` : ''}
+        `,
+        attachments: resultado.pdfBuffer ? [
+          {
+            filename: `${resultado.pago.numero_comprobante}.pdf`,
+            content: resultado.pdfBuffer
+          }
+        ] : []
+      });
+    } catch (emailError) {
+      console.error('No se pudo enviar el email de confirmación del pago:', emailError.message);
+    }
+  }
 
   return success(res, {
     reserva: reservaActualizada,
@@ -422,29 +469,15 @@ exports.obtenerHistorialPagos = async (req, res) => {
 exports.generarComprobantePago = async (req, res) => {
   try {
     const { pagoId } = req.params;
-    const usuarioId = req.usuario.id;
     const { download } = req.query;
 
-    const fs = require('fs');
-    const path = require('path');
-
-    const getLogoDataUri = () => {
-      try {
-        const logoPath = path.resolve(__dirname, '../assets/logo.jpeg');
-        if (!fs.existsSync(logoPath)) return null;
-        const buf = fs.readFileSync(logoPath);
-        return `data:image/jpeg;base64,${buf.toString('base64')}`;
-      } catch (e) {
-        return null;
-      }
-    };
-
-    // Buscar el pago con la información relacionada
+    // Buscar el pago con la información relacionada (tanto por CuentaCorriente como directa por Reserva)
     const pago = await db.sequelize.models.Pago.findByPk(pagoId, {
       include: [
         {
           model: CuentaCorriente,
           as: 'cuenta_corriente',
+          required: false,
           include: [
             {
               model: Cliente,
@@ -454,13 +487,19 @@ exports.generarComprobantePago = async (req, res) => {
             {
               model: Reserva,
               as: 'reserva',
-              attributes: ['id', 'referencia', 'fecha_reserva', 'precio_unitario', 'cantidad_personas', 'moneda_precio_unitario']
+              attributes: ['id', 'referencia', 'fecha_reserva', 'precio_unitario', 'cantidad_personas', 'moneda_precio_unitario', 'nombre_cliente', 'apellido_cliente', 'dni_cliente', 'email_cliente', 'telefono_cliente']
             }
           ]
         },
         {
+          model: Reserva,
+          as: 'reserva',
+          required: false
+        },
+        {
           model: db.sequelize.models.Cuota,
           as: 'cuota',
+          required: false,
           attributes: ['id', 'numero_cuota', 'monto', 'fecha_vencimiento', 'estado']
         }
       ]
@@ -476,14 +515,21 @@ exports.generarComprobantePago = async (req, res) => {
     // Verificar que el usuario tenga permiso para ver este comprobante
     const rolUsuario = req.usuario?.role || req.usuario?.rol;
     const esAdmin = String(rolUsuario || '').toUpperCase().trim() === 'ADMIN';
-    const esCliente = pago.cuenta_corriente?.cliente_id === req.usuario.cliente_id;
+    const reservaIdUsuario = req.usuario?.reserva_id;
+    const reservaIdPago = pago.reserva_id || pago.cuenta_corriente?.reserva_id;
+    const esReservaAutorizada = reservaIdUsuario && String(reservaIdUsuario) === String(reservaIdPago);
 
-    if (!esAdmin && !esCliente) {
+    if (!esAdmin && !esReservaAutorizada) {
       return res.status(403).json({
         success: false,
         message: 'No tiene permiso para ver este comprobante'
       });
     }
+
+    const reservaObj = pago.reserva || pago.cuenta_corriente?.reserva;
+    const montoTotalCalculado = reservaObj 
+      ? (parseFloat(reservaObj.precio_unitario || 0) * parseFloat(reservaObj.cantidad_personas || 0))
+      : 0;
 
     // Formatear los datos para la plantilla
     const data = {
@@ -493,23 +539,23 @@ exports.generarComprobantePago = async (req, res) => {
         estado: 'PAGADO',
         metodo_pago: String(pago.metodo_pago || '').toUpperCase(),
         monto: pago.monto,
-        moneda: pago.cuenta_corriente?.reserva?.moneda_precio_unitario || 'ARS',
-        referencia: pago.cuenta_corriente?.reserva?.referencia || 'N/A',
+        moneda: reservaObj?.moneda_precio_unitario || 'ARS',
+        referencia: reservaObj?.referencia || 'N/A',
         observaciones: pago.observaciones || 'Sin observaciones'
       },
       cliente: {
-        nombre: `${pago.cuenta_corriente?.cliente?.nombre || ''} ${pago.cuenta_corriente?.cliente?.apellido || ''}`.trim() || 'No especificado',
-        documento: pago.cuenta_corriente?.cliente?.dni || 'No especificado',
-        email: pago.cuenta_corriente?.cliente?.email || 'No especificado',
-        telefono: pago.cuenta_corriente?.cliente?.telefono || 'No especificado'
+        nombre: pago.nombre_pagador || `${reservaObj?.nombre_cliente || ''} ${reservaObj?.apellido_cliente || ''}`.trim() || `${pago.cuenta_corriente?.cliente?.nombre || ''} ${pago.cuenta_corriente?.cliente?.apellido || ''}`.trim() || 'No especificado',
+        documento: reservaObj?.dni_cliente || pago.cuenta_corriente?.cliente?.dni || 'No especificado',
+        email: pago.email_pagador || reservaObj?.email_cliente || pago.cuenta_corriente?.cliente?.email || 'No especificado',
+        telefono: reservaObj?.telefono_cliente || pago.cuenta_corriente?.cliente?.telefono || 'No especificado'
       },
       reserva: {
-        referencia: pago.cuenta_corriente?.reserva?.referencia || 'N/A',
-        fecha_reserva: pago.cuenta_corriente?.reserva?.fecha_reserva
-          ? new Date(pago.cuenta_corriente.reserva.fecha_reserva).toLocaleDateString('es-AR')
+        referencia: reservaObj?.referencia || 'N/A',
+        fecha_reserva: reservaObj?.fecha_reserva
+          ? new Date(reservaObj.fecha_reserva).toLocaleDateString('es-AR')
           : 'No especificada',
-        monto_total: (parseFloat(pago.cuenta_corriente?.reserva?.precio_unitario || 0) * parseFloat(pago.cuenta_corriente?.reserva?.cantidad_personas || 0)) || 0,
-        moneda: pago.cuenta_corriente?.reserva?.moneda_precio_unitario || 'ARS'
+        monto_total: montoTotalCalculado,
+        moneda: reservaObj?.moneda_precio_unitario || 'ARS'
       },
       cuotas: pago.cuota ? [{
         numero: pago.cuota.numero_cuota,
@@ -529,7 +575,7 @@ exports.generarComprobantePago = async (req, res) => {
       }
     };
 
-    // Generar el PDF (esta función se implementará en el helper)
+    // Generar el PDF
     const { createPdfFromHtml } = require('../helpers/pdfGenerator');
     const pdfBuffer = await createPdfFromHtml('comprobante', data);
 
@@ -551,3 +597,76 @@ exports.generarComprobantePago = async (req, res) => {
     });
   }
 };
+
+/**
+ * Obtiene todos los pagos registrados con paginación y filtros
+ */
+exports.obtenerTodosLosPagos = asyncHandler(async (req, res) => {
+  const { search, metodo_pago, page = 1, limit = 10 } = req.query;
+  const offset = (page - 1) * limit;
+
+  const where = {};
+  
+  if (metodo_pago) {
+    where.metodo_pago = metodo_pago;
+  }
+
+  // Filtrar por reserva (código o referencia) o nombre de pagador
+  if (search) {
+    where[Op.or] = [
+      { numero_comprobante: { [Op.iLike]: `%${search}%` } },
+      { nombre_pagador: { [Op.iLike]: `%${search}%` } },
+      { '$reserva.codigo$': { [Op.iLike]: `%${search}%` } },
+      { '$reserva.nombre_cliente$': { [Op.iLike]: `%${search}%` } },
+      { '$reserva.apellido_cliente$': { [Op.iLike]: `%${search}%` } }
+    ];
+  }
+
+  const { rows: pagos, count: total } = await db.sequelize.models.Pago.findAndCountAll({
+    where,
+    include: [
+      {
+        model: Reserva,
+        as: 'reserva',
+        required: search ? (search.toLowerCase().includes('res') || search.match(/\d+/) !== null) : false
+      }
+    ],
+    order: [['fecha_pago', 'DESC']],
+    limit: parseInt(limit),
+    offset: parseInt(offset)
+  });
+
+  return success(res, {
+    pagos,
+    pagination: {
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      totalPages: Math.ceil(total / limit)
+    }
+  }, 'Pagos obtenidos exitosamente');
+});
+
+exports.obtenerMisComprobantesReserva = asyncHandler(async (req, res) => {
+  const reservaId = req.usuario?.reserva_id;
+
+  if (!reservaId) {
+    return res.status(403).json({
+      success: false,
+      message: 'No tiene permiso para acceder a estos comprobantes'
+    });
+  }
+
+  const pagos = await db.sequelize.models.Pago.findAll({
+    where: { reserva_id: reservaId },
+    include: [
+      {
+        model: Reserva,
+        as: 'reserva'
+      }
+    ],
+    order: [['fecha_pago', 'DESC']]
+  });
+
+  return success(res, { pagos }, 'Comprobantes obtenidos exitosamente');
+});
