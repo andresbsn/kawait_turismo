@@ -203,8 +203,8 @@ export const apiClient = {
 
 // Servicios de autenticación
 export const authService = {
-  login: async (email, password, rememberMe) => {
-    return apiClient.post('/auth/login', { email, password, rememberMe });
+  login: async (username, password, rememberMe) => {
+    return apiClient.post('/auth/login', { username, password, rememberMe });
   },
 
   loginReserva: async (codigo, dni) => {

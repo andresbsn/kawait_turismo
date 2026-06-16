@@ -1,6 +1,8 @@
 import { message } from 'antd';
 import { authService } from './api';
 
+const FETCH_INTERCEPTOR_FLAG = '__kawaitFetchInterceptorApplied';
+
 // Interceptor para manejar errores globales
 export const errorHandler = (error) => {
   console.error('Error en la petición:', error);
@@ -69,6 +71,10 @@ export const authInterceptor = async (url, options = {}) => {
 
 // Función para configurar los interceptores
 export const setupInterceptors = () => {
+  if (window[FETCH_INTERCEPTOR_FLAG]) {
+    return;
+  }
+
   // Guardar referencia original de fetch
   const originalFetch = window.fetch;
   
@@ -97,6 +103,8 @@ export const setupInterceptors = () => {
       return errorHandler(error);
     }
   };
+
+  window[FETCH_INTERCEPTOR_FLAG] = true;
 };
 
 // Interceptor para verificar la autenticación en cada cambio de ruta
