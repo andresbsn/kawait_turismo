@@ -42,9 +42,18 @@ exports.crearReserva = asyncHandler(async (req, res) => {
     return await reservaService.createReserva(req.body, transaction);
   });
 
-  const reservaCompleta = await reservaService.getReservaById(reservaId);
+  let reservaResponse = { id: reservaId };
 
-  return success(res, { reserva: reservaCompleta }, 'Reserva creada exitosamente', 201);
+  try {
+    const reservaCompleta = await reservaService.getReservaById(reservaId);
+    reservaResponse = reservaCompleta;
+  } catch (error) {
+    if (error?.statusCode !== 404) {
+      throw error;
+    }
+  }
+
+  return success(res, { reserva: reservaResponse }, 'Reserva creada exitosamente', 201);
 });
 
 /**

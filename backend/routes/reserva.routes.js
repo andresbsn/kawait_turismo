@@ -61,6 +61,7 @@ const validarReserva = [
   check('referencias.*.requisitos_ingresos', 'Los requisitos de ingresos deben ser texto').optional({ nullable: true, checkFalsy: true }).isString(),
   check('referencias.*.condiciones_generales', 'Las condiciones generales deben ser texto').optional({ nullable: true, checkFalsy: true }).isString(),
   check('fecha_reserva', 'La fecha de reserva es obligatoria').not().isEmpty().isISO8601(),
+  check('precio_unitario', 'El importe (precio unitario) es obligatorio y debe ser un número mayor o igual a 0').not().isEmpty().isFloat({ min: 0 }),
   check('cantidad_personas', 'La cantidad de personas es obligatoria').isInt({ min: 1 }),
   check('estado', 'El estado no es válido').optional().isIn(['pendiente', 'confirmada', 'cancelada', 'completada']),
   check('monto_seña', 'La seña debe ser un número mayor o igual a 0').optional({ nullable: true, checkFalsy: true }).isFloat({ min: 0 }),

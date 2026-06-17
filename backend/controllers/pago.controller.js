@@ -65,6 +65,67 @@ exports.registrarPagoReserva = asyncHandler(async (req, res) => {
       throw new ValidationError('Esta reserva ya está pagada por completo o el monto es inválido');
     }
 
+    // Buscar si hay CuentaCorriente asociada a la reserva
+    const cuentaCorriente = await CuentaCorriente.findOne({
+      where: { reserva_id: reserva.id },
+      transaction
+    });
+
+    let cuentaCorrienteId = null;
+    let cuotaIdAsociada = null;
+
+    if (cuentaCorriente) {
+      cuentaCorrienteId = cuentaCorriente.id;
+      const nuevoSaldoCC = Math.max(0, Number(cuentaCorriente.saldo_pendiente || 0) - montoAPagar);
+      await cuentaCorriente.update({
+        saldo_pendiente: nuevoSaldoCC,
+        estado: nuevoSaldoCC <= 0 ? 'pagada' : 'parcial',
+        fecha_actualizacion: new Date()
+      }, { transaction });
+
+      // Ahora, distribuir el pago entre las cuotas de esta cuenta corriente
+      const cuotas = await Cuota.findAll({
+        where: { cuenta_corriente_id: cuentaCorriente.id },
+        order: [['numero_cuota', 'ASC']],
+        transaction
+      });
+
+      if (cuotas && cuotas.length > 0) {
+        let montoRestante = montoAPagar;
+        for (const cuota of cuotas) {
+          if (montoRestante <= 0) break;
+
+          const montoCuota = Number(cuota.monto || 0);
+          const yaPagado = Number(cuota.monto_pagado || 0);
+          const pendiente = Math.max(0, montoCuota - yaPagado);
+
+          if (pendiente > 0) {
+            const pagoACuota = Math.min(montoRestante, pendiente);
+            const nuevoMontoPagado = yaPagado + pagoACuota;
+            montoRestante -= pagoACuota;
+
+            let nuevoEstado = 'pendiente';
+            if (nuevoMontoPagado >= montoCuota) {
+              nuevoEstado = 'completo';
+              if (!cuotaIdAsociada) {
+                cuotaIdAsociada = cuota.id;
+              }
+            } else if (nuevoMontoPagado > 0) {
+              nuevoEstado = 'parcial';
+            }
+
+            await cuota.update({
+              monto_pagado: nuevoMontoPagado,
+              estado: nuevoEstado,
+              fecha_pago: new Date(fecha_pago),
+              metodo_pago: metodo_pago,
+              fecha_actualizacion: new Date()
+            }, { transaction });
+          }
+        }
+      }
+    }
+
     // Obtener correlativo de pago máximo para autoincrementar correlativo
     const maxCorrelativo = await db.sequelize.models.Pago.max('correlativo', { transaction }) || 0;
     const correlativo = maxCorrelativo + 1;
@@ -74,9 +135,9 @@ exports.registrarPagoReserva = asyncHandler(async (req, res) => {
       correlativo,
       numero_comprobante: buildNumeroComprobante(correlativo),
       reserva_id: reserva.id,
-      cuenta_corriente_id: null,
-      cuota_id: null,
-      cliente_id: null,
+      cuenta_corriente_id: cuentaCorrienteId,
+      cuota_id: cuotaIdAsociada,
+      cliente_id: cuentaCorriente?.cliente_id || null,
       usuario_id: req.usuario?.id || null,
       monto: montoAPagar,
       metodo_pago,
@@ -218,7 +279,7 @@ exports.registrarPagoReserva = asyncHandler(async (req, res) => {
         ] : []
       });
     } catch (emailError) {
-      console.error('No se pudo enviar el email de confirmación del pago:', emailError.message);
+      console.error('❌ Error detallado al enviar email de pago:', emailError);
     }
   }
 
@@ -399,7 +460,12 @@ exports.obtenerHistorialPagos = async (req, res) => {
       });
     }
 
-    const wherePagos = {};
+    const wherePagos = {
+      [Op.or]: [
+        { reserva_id: reservaId },
+        { '$cuenta_corriente.reserva_id$': reservaId }
+      ]
+    };
     if (fechaInicio || fechaFin) {
       wherePagos.fecha_pago = {};
       if (fechaInicio) wherePagos.fecha_pago[Op.gte] = new Date(fechaInicio);
@@ -415,7 +481,7 @@ exports.obtenerHistorialPagos = async (req, res) => {
         {
           model: CuentaCorriente,
           as: 'cuenta_corriente',
-          where: { reserva_id: reservaId },
+          required: false,
           include: [
             {
               model: Cliente,

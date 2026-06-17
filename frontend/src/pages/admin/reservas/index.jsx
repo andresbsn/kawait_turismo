@@ -102,6 +102,14 @@ const Reservas = () => {
               ? saldoPendienteCuenta 
               : Math.max(0, montoTotalFinal - montoAbonadoFinal);
 
+            console.log(`[Diagnostic] Reserva ${reserva.codigo}:`, {
+              monto_total_db_or_calc: montoTotalFinal,
+              monto_abonado_db: reserva.monto_abonado,
+              monto_abonado_parsed: montoAbonadoFinal,
+              saldo_pendiente_final: saldoPendienteFinal,
+              cuentas_corrientes_len: cuentas.length
+            });
+
             const nombreClienteManual = (reserva.nombre_cliente || reserva.apellido_cliente)
               ? `${reserva.nombre_cliente || ''} ${reserva.apellido_cliente || ''}`.trim()
               : null;

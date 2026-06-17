@@ -12,6 +12,28 @@ const normalizarTexto = (value) => {
   return text.length ? text : null;
 };
 
+const obtenerDatosTitular = (clientes = []) => {
+  if (!Array.isArray(clientes) || clientes.length === 0) {
+    return {
+      nombre_cliente: null,
+      apellido_cliente: null,
+      dni_cliente: null,
+      email_cliente: null,
+      telefono_cliente: null,
+    };
+  }
+
+  const titular = clientes.find((c) => c?.tipo_cliente === 'titular') || clientes[0] || {};
+
+  return {
+    nombre_cliente: normalizarTexto(titular.nombre),
+    apellido_cliente: normalizarTexto(titular.apellido),
+    dni_cliente: normalizarTexto(titular.dni),
+    email_cliente: normalizarTexto(titular.email),
+    telefono_cliente: normalizarTexto(titular.telefono),
+  };
+};
+
 const tieneContenidoReferencia = (ref = {}) => {
   return Boolean(
     normalizarTexto(ref.referencia) ||
@@ -118,6 +140,8 @@ class ReservaService extends BaseService {
     if (search) {
       where[Op.or] = [
         { codigo: { [Op.iLike]: `%${search}%` } },
+        { nombre_cliente: { [Op.iLike]: `%${search}%` } },
+        { apellido_cliente: { [Op.iLike]: `%${search}%` } },
         { '$tour.nombre$': { [Op.iLike]: `%${search}%` } },
         { '$tour.destino$': { [Op.iLike]: `%${search}%` } },
         { tour_nombre: { [Op.iLike]: `%${search}%` } },
@@ -153,7 +177,9 @@ class ReservaService extends BaseService {
         'precio_unitario', 'moneda_precio_unitario', 'estado', 'notas', 'activo',
         'created_at', 'updated_at',
         'tour_id', 'tour_nombre', 'tour_destino', 'tour_descripcion',
-        'fecha_inicio', 'fecha_fin'
+        'fecha_inicio', 'fecha_fin',
+        'nombre_cliente', 'apellido_cliente', 'dni_cliente', 'email_cliente', 'telefono_cliente',
+        'monto_abonado', 'estado_pago', 'metodo_pago'
       ],
       where,
       include: [
@@ -258,6 +284,8 @@ class ReservaService extends BaseService {
       condiciones_generales
     } = data;
 
+    const titularFallback = obtenerDatosTitular(clientes);
+
     // Validar que se proporcione un tour_id o, para tour personalizado, al menos el destino
     if (!tour_id && !tour_destino) {
       throw new ValidationError('Se requiere un tour existente o al menos el destino de un tour personalizado');
@@ -294,11 +322,11 @@ class ReservaService extends BaseService {
       fecha_vencimiento_hotel: referenciaTerrestre?.fecha_vencimiento_hotel || data.fecha_vencimiento_hotel || null,
       requisitos_ingresos: referenciaTerrestre?.requisitos_ingresos || data.requisitos_ingresos || null,
       condiciones_generales: referenciaTerrestre?.condiciones_generales || data.condiciones_generales || null,
-      nombre_cliente: normalizarTexto(nombre_cliente),
-      apellido_cliente: normalizarTexto(apellido_cliente),
-      dni_cliente: normalizarTexto(dni_cliente),
-      email_cliente: normalizarTexto(email_cliente),
-      telefono_cliente: normalizarTexto(telefono_cliente),
+      nombre_cliente: normalizarTexto(nombre_cliente) || titularFallback.nombre_cliente,
+      apellido_cliente: normalizarTexto(apellido_cliente) || titularFallback.apellido_cliente,
+      dni_cliente: normalizarTexto(dni_cliente) || titularFallback.dni_cliente,
+      email_cliente: normalizarTexto(email_cliente) || titularFallback.email_cliente,
+      telefono_cliente: normalizarTexto(telefono_cliente) || titularFallback.telefono_cliente,
       ...(!tour_id && {
         tour_nombre,
         tour_destino,
