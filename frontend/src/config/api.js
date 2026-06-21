@@ -475,7 +475,9 @@ export const bookingService = {
       estado: params.estado,
       search: params.search,
       fechaInicio: params.fechaInicio,
-      fechaFin: params.fechaFin
+      fechaFin: params.fechaFin,
+      referencia: params.referencia,
+      titular: params.titular
     };
 
     const query = new URLSearchParams();

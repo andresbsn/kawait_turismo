@@ -335,7 +335,7 @@ const ReservaForm = () => {
         clientes: clientesPayload,
         referencias: referenciasPayload,
         moneda_precio_unitario: values.moneda_precio_unitario || 'ARS',
-        modalidad_pago: values.modalidad_pago || 'cuotas'
+        modalidad_pago: values.modalidad_pago || 'sin_cuotas'
       };
 
       if (!reservaData.tour_id) {
@@ -856,7 +856,7 @@ const ReservaForm = () => {
                 <Form.Item
                   label="Modalidad de pago"
                   name="modalidad_pago"
-                  initialValue="cuotas"
+                  initialValue="sin_cuotas"
                 >
                   <Select>
                     <Option value="sin_cuotas">Sin cuotas (entregas libres)</Option>

@@ -122,7 +122,7 @@ class ReservaService extends BaseService {
    * Obtener todas las reservas con filtros y paginación
    */
   async getReservas(params = {}) {
-    const { page = 1, limit = 10, search, estado, fechaInicio, fechaFin } = params;
+    const { page = 1, limit = 10, search, estado, fechaInicio, fechaFin, referencia, titular } = params;
     const offset = (page - 1) * limit;
 
     const where = { activo: true };
@@ -165,9 +165,38 @@ class ReservaService extends BaseService {
       };
     }
 
+    const referenciasInclude = {
+      model: ReservaReferencia,
+      as: 'referencias',
+      required: false,
+      attributes: ['id', 'tipo', 'referencia', 'titular', 'proveedor']
+    };
+
+    if (referencia) {
+      where[Op.and] = where[Op.and] || [];
+      where[Op.and].push({
+        [Op.or]: [
+          { referencia: { [Op.iLike]: `%${referencia}%` } },
+          { codigo: { [Op.iLike]: `%${referencia}%` } },
+          { '$referencias.referencia$': { [Op.iLike]: `%${referencia}%` } }
+        ]
+      });
+    }
+
+    if (titular) {
+      where[Op.and] = where[Op.and] || [];
+      where[Op.and].push({
+        [Op.or]: [
+          { nombre_cliente: { [Op.iLike]: `%${titular}%` } },
+          { apellido_cliente: { [Op.iLike]: `%${titular}%` } },
+          { '$referencias.titular$': { [Op.iLike]: `%${titular}%` } }
+        ]
+      });
+    }
+
     const total = await Reserva.count({
       where,
-      include: [tourInclude],
+      include: [tourInclude, referenciasInclude],
       distinct: true
     });
 
@@ -196,7 +225,8 @@ class ReservaService extends BaseService {
           attributes: ['id', 'monto_total', 'saldo_pendiente', 'estado'],
           required: false
         },
-        tourInclude
+        tourInclude,
+        referenciasInclude
       ],
       order: [['fecha_reserva', 'DESC']],
       limit: parseInt(limit, 10),
@@ -225,7 +255,8 @@ class ReservaService extends BaseService {
           model: Cliente,
           as: 'clientes',
           attributes: ['id', 'nombre', 'apellido', 'email', 'telefono'],
-          through: { attributes: ['tipo_cliente'] }
+          through: { attributes: ['tipo_cliente'] },
+          required: false
         },
         {
           model: Tour,
@@ -273,7 +304,7 @@ class ReservaService extends BaseService {
       fecha_inicio,
       fecha_fin,
       moneda_precio_unitario,
-      modalidad_pago = 'cuotas',
+      modalidad_pago = 'sin_cuotas',
       nombre_cliente,
       apellido_cliente,
       dni_cliente,

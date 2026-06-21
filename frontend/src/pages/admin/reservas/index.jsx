@@ -54,6 +54,8 @@ const Reservas = () => {
     estado: '',
     search: '',
     fecha: null,
+    referencia: '',
+    titular: '',
   });
   const [pagoModalVisible, setPagoModalVisible] = useState(false);
   const [reservaPagoSeleccionada, setReservaPagoSeleccionada] = useState(null);
@@ -67,13 +69,15 @@ const Reservas = () => {
       setLoading(true);
 
       const { current = 1, pageSize = 10 } = params;
-      const { estado, search, fecha } = filters;
+      const { estado, search, fecha, referencia, titular } = filters;
 
       const queryParams = {
         page: current,
         limit: pageSize,
         ...(estado && { estado }),
         ...(search && { search }),
+        ...(referencia && { referencia }),
+        ...(titular && { titular }),
         ...(fecha && fecha[0] && fecha[1] && {
           fechaInicio: fecha[0].format('YYYY-MM-DD'),
           fechaFin: fecha[1].format('YYYY-MM-DD')
@@ -254,6 +258,8 @@ const Reservas = () => {
       estado: '',
       search: '',
       fecha: null,
+      referencia: '',
+      titular: '',
     });
   };
 
@@ -283,21 +289,46 @@ const Reservas = () => {
 
   const columns = [
     {
-      title: 'Código',
+      title: 'Código / Referencias',
       dataIndex: 'codigo',
       key: 'codigo',
-      render: (text) => <span className="font-medium">{text}</span>,
+      render: (text, record) => {
+        const refColors = {
+          terrestre: { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+          aereo: { bg: 'bg-cyan-50', text: 'text-cyan-700', border: 'border-cyan-200' },
+          asistencia: { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' }
+        };
+
+        return (
+          <div>
+            <div className="font-semibold text-gray-800">{text}</div>
+            {Array.isArray(record.referencias) && record.referencias.length > 0 && (
+              <div className="mt-1.5 flex flex-col gap-1">
+                {record.referencias.map((ref) => {
+                  const colors = refColors[ref.tipo] || { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200' };
+                  return (
+                    <div 
+                      key={ref.id} 
+                      className={`text-[11px] px-2 py-0.5 rounded border ${colors.bg} ${colors.text} ${colors.border} flex flex-col`}
+                      style={{ maxWidth: '200px' }}
+                    >
+                      <div className="font-medium capitalize">{ref.tipo}</div>
+                      <div className="truncate">Ref: <span className="font-semibold">{ref.referencia || 'Sin ref.'}</span></div>
+                      {ref.titular && <div className="truncate text-gray-500">Titular: {ref.titular}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      },
     },
     {
-      title: 'Tour',
-      dataIndex: ['tour', 'nombre'],
-      key: 'tour',
-      render: (_, record) => (
-        <div>
-          <div className="font-medium">{record.tour?.nombre}</div>
-          <div className="text-xs text-gray-500">{record.tour?.destino}</div>
-        </div>
-      ),
+      title: 'Destino',
+      dataIndex: ['tour', 'destino'],
+      key: 'destino',
+      render: (destino) => <span className="font-medium text-gray-800">{destino || 'Sin destino'}</span>,
     },
     {
       title: 'Cliente',
@@ -421,8 +452,9 @@ const Reservas = () => {
       </div>
 
       <Card className="mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">Búsqueda General</label>
             <Input
               placeholder="Buscar por código o cliente"
               value={filters.search}
@@ -433,6 +465,29 @@ const Reservas = () => {
             />
           </div>
           <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">Referencia</label>
+            <Input
+              placeholder="Ref. de reserva, aéreo, terrestre..."
+              value={filters.referencia}
+              onChange={(e) => handleFilterChange('referencia', e.target.value)}
+              onPressEnter={() => fetchReservas()}
+              allowClear
+              prefix={<SearchOutlined />}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">Titular de Referencia / Nombre</label>
+            <Input
+              placeholder="Nombre de titular en referencias..."
+              value={filters.titular}
+              onChange={(e) => handleFilterChange('titular', e.target.value)}
+              onPressEnter={() => fetchReservas()}
+              allowClear
+              prefix={<SearchOutlined />}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">Estado</label>
             <Select
               placeholder="Filtrar por estado"
               style={{ width: '100%' }}
@@ -447,6 +502,7 @@ const Reservas = () => {
             </Select>
           </div>
           <div>
+            <label className="text-xs font-semibold text-gray-500 mb-1 block">Rango de Fechas</label>
             <RangePicker 
               style={{ width: '100%' }}
               onChange={(dates) => handleFilterChange('fecha', dates)}
@@ -455,7 +511,7 @@ const Reservas = () => {
               placeholder={['Fecha inicio', 'Fecha fin']}
             />
           </div>
-          <div>
+          <div className="flex items-end">
             <Button 
               onClick={limpiarFiltros}
               className="w-full"
