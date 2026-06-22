@@ -18,9 +18,10 @@ router.get('/:id', checkAuth, cuentaCorrienteController.obtenerCuentaCorriente);
 router.put('/:id/estado', checkAuth, checkRol(['admin']), cuentaCorrienteController.actualizarEstadoCuenta);
 
 const { uploadComprobante } = require('../middlewares/upload.middleware');
+const { optimizeImage } = require('../middlewares/optimize.middleware');
 
 // Registrar una entrega libre (sin cuota) sobre una cuenta corriente
-router.post('/:cuentaId/entrega', checkAuth, uploadComprobante.single('comprobante'), cuotaController.registrarEntrega);
+router.post('/:cuentaId/entrega', checkAuth, uploadComprobante.single('comprobante'), optimizeImage, cuotaController.registrarEntrega);
 
 // Obtener pagos (entregas) de una cuenta corriente
 router.get('/:id/pagos', checkAuth, cuentaCorrienteController.obtenerPagosCuenta);
